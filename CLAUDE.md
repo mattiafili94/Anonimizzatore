@@ -16,7 +16,14 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
 - Il PC non ha sorgenti NuGet globali: le indica il `nuget.config` della repo (nuget.org). Python non è installato.
 - **Tappa 1 fatta** (10/11/2026): soluzione `Anonimizzatore.slnx`, `src/Anonimizzatore.Motore` (ScriptDom 180.140.0,
   `LettoreScript`), `tests/Anonimizzatore.Motore.Test` (xUnit, esempi inventati in `Esempi/`), 4 test verdi.
-- **Prossimo passo**: tappa 2 del piano (`MappaCliente`, `GeneratoreNomi`, salvataggio JSON con cifratura finta nei test).
+- **Tappa 2 fatta** (10/11/2026): `Mappa/` (`Ruolo`, `CodiceTipo`, `GeneratoreNomi`, `MappaCliente`) e `Profili/`
+  (`Profilo`, `ArchivioProfili`, `ProtezioneDpapi`), 63 test verdi. Scelte di dettaglio:
+  - ruoli della stessa "famiglia" condividono contatore e nomi: server + linked server (`srv_`), login + utente
+    (`usr_`), variabile + parametro;
+  - un solo file cifrato per profilo, `{Id}.anonprofile` (profilo + mappa insieme): il nome del cliente non compare
+    nel nome del file;
+  - i nomi generati saltano i nomi reali già in mappa e i "nomi riservati" (es. dallo schema importato).
+- **Prossimo passo**: tappa 3 del piano (nomi degli oggetti, livello 1, e prima prova di andata e ritorno).
 
 ## Regole fisse (repo pubblica)
 
