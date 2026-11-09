@@ -1,0 +1,41 @@
+# --- Dati reali: MAI nella repo ---
+# Script reali dei clienti per le prove di Mattia
+prove-locali/
+# Profili, mappe e dati locali dell'app
+*.anonprofile
+*.anonmap
+profili/
+
+# --- Build .NET ---
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+artifacts/
+*.zip
+
+# --- Visual Studio / Rider / VS Code ---
+.vs/
+.idea/
+*.user
+*.suo
+*.rsuser
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# --- Test ---
+TestResults/
+coverage/
+*.coverage
+
+# --- Node (asset dell'interfaccia, es. Monaco) ---
+node_modules/
+
+# --- Claude Code (impostazioni personali) ---
+.claude/settings.local.json
+
+# --- Sistema ---
+Thumbs.db
+Desktop.ini
