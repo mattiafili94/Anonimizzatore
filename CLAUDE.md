@@ -15,7 +15,8 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   1. Se la cartella locale non è ancora collegata a git: `git init -b main`, `git remote add origin
      https://github.com/mattiafili94/Anonimizzatore.git`, `git fetch origin`, `git reset origin/main`,
      `git branch -u origin/main main` (i file locali sono gli stessi della repo).
-  2. Preparare il **piano della fase 1** (motore + test) e farlo approvare a Mattia prima di scrivere codice.
+  2. ~~Preparare il piano della fase 1~~ fatto: [docs/piano-fase-1.md](docs/piano-fase-1.md).
+     **In attesa dell'approvazione di Mattia** (e delle risposte alle domande nella sezione 7) prima di scrivere codice.
 
 ## Regole fisse (repo pubblica)
 
