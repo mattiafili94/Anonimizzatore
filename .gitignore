@@ -4,7 +4,8 @@ prove-locali/
 # Profili, mappe e dati locali dell'app
 *.anonprofile
 *.anonmap
-profili/
+# (solo nella cartella principale: le cartelle di codice "Profili/" del motore restano nella repo)
+/profili/
 
 # --- Build .NET ---
 bin/
