@@ -7,15 +7,16 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
 
 ## Stato attuale (10/11/2026)
 
-- Brainstorming concluso: le decisioni sono qui sotto. Nessun codice ancora.
+- Brainstorming concluso: le decisioni sono qui sotto.
 - Repo GitHub: https://github.com/mattiafili94/Anonimizzatore. La cartella locale
   `C:\Users\matti\Progetti_Claude\Anonimizzatore` (accanto ad Arco) è collegata a git sul ramo `main`.
 - Piano della fase 1 **approvato** il 10/11/2026: [docs/piano-fase-1.md](docs/piano-fase-1.md) (decisioni nella
   sezione 7).
-- Si sviluppa in locale sul PC Windows di Mattia.
-- **Da fare subito**:
-  1. Installare il **.NET 10 SDK** (oggi non presente sul PC).
-  2. Tappa 1 del piano: scheletro della soluzione e primo test con ScriptDom.
+- Si sviluppa in locale sul PC Windows di Mattia (.NET SDK 10.0.403). Test: `dotnet test` dalla cartella principale.
+- Il PC non ha sorgenti NuGet globali: le indica il `nuget.config` della repo (nuget.org). Python non è installato.
+- **Tappa 1 fatta** (10/11/2026): soluzione `Anonimizzatore.slnx`, `src/Anonimizzatore.Motore` (ScriptDom 180.140.0,
+  `LettoreScript`), `tests/Anonimizzatore.Motore.Test` (xUnit, esempi inventati in `Esempi/`), 4 test verdi.
+- **Prossimo passo**: tappa 2 del piano (`MappaCliente`, `GeneratoreNomi`, salvataggio JSON con cifratura finta nei test).
 
 ## Regole fisse (repo pubblica)
 
