@@ -1,6 +1,6 @@
 # Piano della fase 1 — Motore + test
 
-Stato: **bozza, da approvare** (9/11/2026).
+Stato: **approvato** da Mattia il 10/11/2026 (bozza del 9/11/2026).
 Obiettivo: una libreria C# che anonimizza e de-anonimizza script T-SQL, senza interfaccia, verificata da test
 automatici su script di esempio inventati. Quando la fase 1 è finita, l'interfaccia (fase 2) deve solo "chiamare" il
 motore.
@@ -105,14 +105,18 @@ Ogni tappa finisce con test verdi e un commit. Dopo ogni tappa posso fermarmi a 
 - Livello 4 (letterali/dati), salvo l'eventuale avviso leggero su email/CF/IBAN.
 - Pacchetto zip e controllo WebView2 (fase 3).
 
-## 7. Domande per Mattia (prima di partire)
+## 7. Decisioni (approvate da Mattia il 10/11/2026)
 
-1. **Numerazione delle colonne**: propongo un **unico contatore per tutte le colonne** (`col_vc50_001`,
-   `col_int_002`, `col_x_003`…), così il numero da solo identifica la colonna e la de-anonimizzazione funziona anche se
-   l'IA "sbaglia" la parte del tipo. Il tipo nel nome resta quello noto la prima volta (nomi stabili). Va bene?
-2. **Contatori degli oggetti**: uno per prefisso (`tbl_001`, `vw_001`, `usp_001` partono tutti da 1). Va bene?
-3. **Indici e constraint** il cui nome contiene parti anonimizzate: propongo di sostituire solo le parti
-   (`IX_Ordini_Data` → `IX_tbl_002_Data`) invece di rinominarli tutti in `ix_001`, così l'IA capisce a cosa servono.
-   `ix_001`/`pk_001` si usano solo quando il nome non si può scomporre. Va bene?
-4. **Sviluppo**: la fase 1 la sviluppo e la testo qui nell'ambiente cloud (Linux, il motore non dipende da Windows).
-   Sul tuo PC basterà fare `git pull` e potrai lanciare gli stessi test con `dotnet test`. Va bene?
+Promemoria: colonne, variabili e parametri restano **in chiaro di default**, perché servono all'IA come contesto.
+Le regole 1 e 2 riguardano solo i pochi nomi anonimizzati per eccezione (parole in blacklist).
+
+1. **Numerazione delle colonne anonimizzate**: un **unico contatore per tutte le colonne** (`col_vc50_001`,
+   `col_int_002`, `col_x_003`…). Il numero da solo identifica la colonna, così la de-anonimizzazione funziona anche se
+   l'IA "sbaglia" la parte del tipo. Il tipo nel nome resta quello noto la prima volta (nomi stabili).
+2. **Variabili e parametri anonimizzati**: stessa regola, un unico contatore (`@v_int_001`, `@p_vc20_002`…).
+3. **Contatori degli oggetti**: uno per prefisso (`tbl_001`, `vw_001`, `usp_001` partono tutti da 1).
+4. **Indici e constraint** il cui nome contiene parti anonimizzate: si sostituiscono solo le parti
+   (`IX_Ordini_Data` → `IX_tbl_002_Data`), così l'IA capisce a cosa servono. `ix_001`/`pk_001` solo quando il nome
+   non si può scomporre.
+5. **Sviluppo**: in locale sul PC Windows di Mattia. Prima della tappa 1 va installato il **.NET 10 SDK**
+   (oggi non presente); poi i test si lanciano con `dotnet test`.

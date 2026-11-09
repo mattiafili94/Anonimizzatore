@@ -5,18 +5,17 @@ Proprietario: Mattia (repo pubblica `mattiafili94/Anonimizzatore`, licenza MIT).
 Lingua di lavoro: **italiano** (testi dell'app, commenti, messaggi di commit). Mattia è un DBA SQL Server, ma è alle
 prime armi con Claude Code: spiegare le cose in modo semplice.
 
-## Stato attuale (9/11/2026)
+## Stato attuale (10/11/2026)
 
 - Brainstorming concluso: le decisioni sono qui sotto. Nessun codice ancora.
-- Repo GitHub creata da Mattia: https://github.com/mattiafili94/Anonimizzatore, con il primo commit dei file di
-  partenza (CLAUDE.md, README.md, LICENSE, .gitignore).
-- Cartella locale: `C:\Users\matti\Progetti_Claude\Anonimizzatore` (accanto ad Arco).
+- Repo GitHub: https://github.com/mattiafili94/Anonimizzatore. La cartella locale
+  `C:\Users\matti\Progetti_Claude\Anonimizzatore` (accanto ad Arco) è collegata a git sul ramo `main`.
+- Piano della fase 1 **approvato** il 10/11/2026: [docs/piano-fase-1.md](docs/piano-fase-1.md) (decisioni nella
+  sezione 7).
+- Si sviluppa in locale sul PC Windows di Mattia.
 - **Da fare subito**:
-  1. Se la cartella locale non è ancora collegata a git: `git init -b main`, `git remote add origin
-     https://github.com/mattiafili94/Anonimizzatore.git`, `git fetch origin`, `git reset origin/main`,
-     `git branch -u origin/main main` (i file locali sono gli stessi della repo).
-  2. ~~Preparare il piano della fase 1~~ fatto: [docs/piano-fase-1.md](docs/piano-fase-1.md).
-     **In attesa dell'approvazione di Mattia** (e delle risposte alle domande nella sezione 7) prima di scrivere codice.
+  1. Installare il **.NET 10 SDK** (oggi non presente sul PC).
+  2. Tappa 1 del piano: scheletro della soluzione e primo test con ScriptDom.
 
 ## Regole fisse (repo pubblica)
 
