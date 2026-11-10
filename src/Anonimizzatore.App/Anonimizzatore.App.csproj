@@ -10,6 +10,9 @@
     <AssemblyName>Anonimizzatore</AssemblyName>
     <!-- Il numero di versione che si vede nell'app (Impostazioni e barra laterale). -->
     <Version>0.1.0</Version>
+    <!-- Pubblicazione: niente simboli di debug e solo le lingue che servono (italiano, inglese): cartella più leggera. -->
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>it;en</SatelliteResourceLanguages>
     <Product>Anonimizzatore T-SQL</Product>
     <Description>Anonimizza script T-SQL da passare all'IA e rimette i nomi veri nelle risposte. Funziona offline.</Description>
   </PropertyGroup>

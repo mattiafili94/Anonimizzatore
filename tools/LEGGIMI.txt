@@ -1,0 +1,28 @@
+ANONIMIZZATORE T-SQL
+====================
+
+Anonimizza gli script T-SQL prima di passarli a un'IA e rimette i nomi veri nella sua risposta.
+Funziona solo sul tuo PC, senza Internet: non invia nulla da nessuna parte.
+
+COME SI USA
+-----------
+1. Estrai tutta la cartella dallo zip dove vuoi (per esempio C:\Strumenti\Anonimizzatore).
+   Se Windows segna lo zip come "bloccato": prima di estrarlo, clic destro sullo zip > Proprietà > spunta "Sblocca" > OK.
+2. Avvia Anonimizzatore.exe.
+   La prima volta Windows può mostrare "Windows ha protetto il PC": clic su "Ulteriori informazioni" e poi su "Esegui comunque".
+   (L'app non è firmata digitalmente: è normale.)
+3. Crea un profilo per ogni cliente (scheda Profili). Facoltativo: importa lo schema del database seguendo i due passi nella finestra.
+4. Scheda Anonimizza: incolla gli script, premi Anonimizza (o Ctrl+Invio), poi "Copia testo per l'IA" e incollalo nell'IA.
+5. Scheda Ripristina: incolla la risposta dell'IA e premi Ripristina nomi (o Ctrl+Invio).
+
+REQUISITI
+---------
+Windows 10 (versione 1809 o successiva) o Windows 11, con Microsoft Edge WebView2 Runtime (già presente nei Windows aggiornati).
+Se manca, l'app lo dice all'avvio: installa "WebView2 Runtime - Evergreen Standalone" dal sito di Microsoft e riavvia.
+
+I TUOI DATI
+-----------
+I profili e i nomi assegnati stanno in %APPDATA%\Anonimizzatore (cifrati con il tuo utente di Windows), fuori dalla cartella dell'app.
+- Per AGGIORNARE: sostituisci la cartella dell'app con quella nuova. I profili restano.
+- I profili si aprono solo con lo stesso utente sullo stesso PC: su un PC nuovo bisogna ricrearli.
+- Il numero di versione si vede in basso nella barra a sinistra e in Impostazioni.

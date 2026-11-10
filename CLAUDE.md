@@ -281,10 +281,15 @@ Fatto, con 600 test verdi (587 motore + 13 interfaccia):
   cambiare lo schema o le regole di un profilo toglie il risultato già mostrato. Un testo incollato che non si legge blocca la creazione del
   profilo (mai creato di nascosto senza schema). Nell'anteprima il limite dei messaggi SignalR è 16 MB (era 32 KB).
 - **Tappa 2F in parte**: scorciatoia **Ctrl+Invio** negli editor (Anonimizza / Ripristina; il testo si manda prima dell'azione).
-- **Non ancora fatto**: resto di 2F (rifinitura di accessibilità con prova nei tre temi, test dei componenti con bUnit), fase 3 (cartella
-  portabile self-contained, numero di versione da pubblicazione). Il testo degli script scritto negli editor **non** si salva alla chiusura
+- **Fase 3 fatta** (10/11/2026): `powershell -File tools\pubblica.ps1` crea `artifacts\Anonimizzatore-<versione>.zip` (70 MB, cartella di
+  174 MB estratta: runtime .NET incluso, win-x64, self-contained; `artifacts/` è ignorata da git) con `tools/LEGGIMI.txt` dentro (istruzioni per
+  i colleghi: sblocco dello zip, SmartScreen, WebView2, dati in `%APPDATA%`, aggiornare = sostituire la cartella). La versione viene da
+  `<Version>` in `Anonimizzatore.App.csproj` (ora 0.1.0) e si vede nella barra e in Impostazioni. Il controllo di WebView2 all'avvio c'è
+  (`App.xaml.cs`, messaggio con le istruzioni). Provata: l'exe pubblicato si avvia e mostra la pagina; **non** provata su un PC senza .NET
+  né senza WebView2.
+- **Non ancora fatto**: resto di 2F (rifinitura di accessibilità con prova nei tre temi, test dei componenti con bUnit). Il testo degli script scritto negli editor **non** si salva alla chiusura
   dell'app (i profili sì: sono su disco in `%APPDATA%\Anonimizzatore\profili`, cifrati con DPAPI, e si caricano una volta all'avvio).
-- **Prossimo passo**: resto di 2F, poi fase 3, poi tappa 14 (script reali in `prove-locali/`).
+- **Prossimo passo**: resto di 2F, poi tappa 14 (script reali in `prove-locali/`).
 
 ## Regole fisse (repo pubblica)
 
