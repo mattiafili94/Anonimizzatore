@@ -36,9 +36,15 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     identica solo se il maiuscolo/minuscolo è coerente, altrimenti coincide a meno delle maiuscole.
   - non ancora coperti (tappe successive): colonne/variabili/constraint (4), liste (5), commenti (6), sicurezza (7),
     stringhe e SQL dinamico (8-9). Per ora, per esempio, `PK_Ordini` e il testo dei commenti restano in chiaro.
-- **Sessioni parallele proposte** (10/11/2026, ognuna sul suo ramo, da riunire in `main` a mano): `DeAnonimizzatore`
-  (tappa 12), `GestoreCommenti` (tappa 6), `AnalizzatoreInfrastruttura` (parte pura-testo della tappa 8). Non
-  modificano CLAUDE.md: lo aggiorna chi li riunisce.
+- **Pezzi sviluppati in parallelo e riuniti in `main`** (10/11/2026, 277 test verdi in tutto). Sono classi autonome,
+  **non ancora collegate** a `AnonimizzatoreScript` (si agganciano nelle tappe indicate):
+  - `Commenti/GestoreCommenti` (tappa 6): commenti ↔ segnaposto `/* c001 */`, con elenco dei segnaposto persi;
+  - `Deanonimizzazione/DeAnonimizzatore` (tappa 12): rimette i nomi nel testo libero dell'IA, con report;
+  - `Infrastruttura/AnalizzatoreInfrastruttura` (parte testo della tappa 8): percorsi, IP, host, email, URL, stringhe
+    di connessione, con metodo inverso `Ripristina`. Ha aggiunto i ruoli `Cartella`, `File`, `Ip`, `Email` in
+    `Ruolo` (famiglie `dir`, `file`, `ip`, `mail`).
+  Da fare quando si agganciano: il `DeAnonimizzatore` dovrà ripristinare anche i segnaposto commento e i valori
+  dell'infrastruttura; i test di andata e ritorno useranno quello vero al posto di `Aiuti.RipristinaPerProva`.
 - **Prossimo passo**: tappa 4 (colonne, variabili, alias, indici e constraint, nomi composti `FK_Clienti_Ordini`).
 
 ## Regole fisse (repo pubblica)
