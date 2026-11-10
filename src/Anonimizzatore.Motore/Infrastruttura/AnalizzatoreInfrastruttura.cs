@@ -632,6 +632,7 @@ public sealed partial class AnalizzatoreInfrastruttura
         for (var k = 0; k < daMappare; k++)
         {
             if (GiaAnonimo(parti[k])) continue;
+            if (k > 0 && ElenchiInfrastruttura.EtichetteCloud.Contains(parti[k])) continue; // blob.core.windows.net
             if (k == 0 && parti[0].Equals("www", StringComparison.OrdinalIgnoreCase) && daMappare > 1) continue;
             var eServer = k == 0 && !(daMappare == 1 && conSuffisso);
             risultato[k] = _mappa.Ottieni(eServer ? Ruolo.Server : Ruolo.Dominio, parti[k]);
@@ -658,7 +659,7 @@ public sealed partial class AnalizzatoreInfrastruttura
         }
     }
 
-    [GeneratedRegex(@"\b(?<schema>https?|ftps?|sftp|wss?|ssh|smb)://(?:(?<utente>[^\s/@:'""<>]+)(?::(?<pwd>[^\s/@'""<>]*))?@)?(?<host>[A-Za-z0-9._\-]+)(?::(?<porta>\d+))?(?<resto>[/?#][^\s'""<>]*)?", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(?<schema>https?|ftps?|sftp|wss?|ssh|smb|tcp)://(?:(?<utente>[^\s/@:'""<>]+)(?::(?<pwd>[^\s/@'""<>]*))?@)?(?<host>[A-Za-z0-9._\-]+)(?::(?<porta>\d+))?(?<resto>[/?#][^\s'""<>]*)?", RegexOptions.IgnoreCase)]
     private static partial Regex Url();
 
     [GeneratedRegex(@"(?<![\w.%+\-])(?<l>[A-Za-z0-9][A-Za-z0-9._%+\-]*)@(?<d>(?:[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,})(?![\w@])")]
@@ -706,7 +707,8 @@ public sealed partial class AnalizzatoreInfrastruttura
     /// <summary>Un host anonimo è <c>srv_NN</c> o <c>dom_NN</c> seguito da <c>dom_NN</c> o da un suffisso di dominio noto (<c>local</c>, <c>com</c>...).</summary>
     private static bool SonoHostAnonimi(string host) =>
         host.Split('.').Skip(1).All(e => Regex.IsMatch(e, @"^dom_\d{2,}$", RegexOptions.IgnoreCase)
-                                         || ElenchiInfrastruttura.TldTestoLibero.Contains(e));
+                                         || ElenchiInfrastruttura.TldTestoLibero.Contains(e)
+                                         || ElenchiInfrastruttura.EtichetteCloud.Contains(e));
 
     [GeneratedRegex(@"^(?:tcp|np|lpc):", RegexOptions.IgnoreCase)]
     private static partial Regex PrefissoProtocollo();

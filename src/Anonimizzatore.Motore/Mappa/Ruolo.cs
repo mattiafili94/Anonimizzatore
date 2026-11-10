@@ -13,6 +13,7 @@ public enum Ruolo
     Funzione,
     Trigger,
     Job,
+
     Login,
     Utente,
     RuoloDb,
@@ -36,6 +37,9 @@ public enum Ruolo
     File,
     Ip,
     Email,
+
+    /// <summary>Gruppo di disponibilità Always On (AG). In fondo all'elenco: i numeri dei ruoli già salvati non cambiano.</summary>
+    GruppoDisponibilita,
 }
 
 /// <summary>
@@ -56,6 +60,7 @@ public static class FamigliaRuolo
         Ruolo.Funzione => "fn",
         Ruolo.Trigger => "trg",
         Ruolo.Job => "job",
+        Ruolo.GruppoDisponibilita => "ag",
         Ruolo.Login or Ruolo.Utente => "usr",
         Ruolo.RuoloDb => "rol",
         Ruolo.Indice => "ix",

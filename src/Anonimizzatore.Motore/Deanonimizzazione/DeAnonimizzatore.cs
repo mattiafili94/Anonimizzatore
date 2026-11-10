@@ -48,7 +48,7 @@ public sealed partial class DeAnonimizzatore
     // a destra niente lettere/cifre (un "_" va bene).
     private const string FormaToken =
         @"(?<![\p{L}\p{N}@#])(?:" +
-        $"(?:srv|db|sch|dom|tbl|vw|usp|fn|trg|job|usr|rol|ix|pk|fk|df|ck|uq|al)_{Numero}" +
+        $"(?:srv|db|sch|dom|ag|tbl|vw|usp|fn|trg|job|usr|rol|ix|pk|fk|df|ck|uq|al)_{Numero}" +
         $"|col_{Tipo}_{Numero}" +
         $"|@[vp]_{Tipo}_{Numero}" +
         $"|##?tmp_{Numero}" +

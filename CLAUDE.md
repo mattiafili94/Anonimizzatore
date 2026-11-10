@@ -233,6 +233,15 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     (errore del motore); se l'originale non lo era non si pretende;
   - **dati personali** nelle stringhe → solo `Avviso`: email, codice fiscale, IBAN (controllo mod 97), carta (Luhn), IPv4, URL.
   Sugli esempi del progetto: tutti puliti tranne `backup-restore-acme.sql` (i due testi liberi noti, righe 4 e 31).
+- **Basket di esempi** (10/11/2026, 619 test verdi): 12 script SQL Server tipici con nomi inventati in
+  `tests/Anonimizzatore.Motore.Test/Esempi/basket/` (query, procedure, backup/restore, sicurezza, chiavi, DML, gruppi di
+  disponibilità, job, linked server), provati con `BasketTest` (anonimizza, ritorno uguale, nessuna parola chiave scambiata per
+  nome). Difetti trovati e corretti: `msdb..backupset` (schema vuoto) dava "Il nome è vuoto"; gli oggetti di `master`/`msdb`/`model`
+  e le tabelle di msdb (`sysjobs`, `backupset`...) restano in chiaro; in modalità di riserva `FROM DISK/URL/WINDOWS` non sono
+  tabelle; nuovo ruolo `GruppoDisponibilita` (`ag_01`) per `CREATE/ALTER/DROP AVAILABILITY GROUP` e `SET HADR AVAILABILITY GROUP`,
+  repliche e listener come `srv_`, endpoint `TCP://...`; le etichette cloud (`blob.core.windows.net`) restano in chiaro.
+  **Non ancora fatto**: la blacklist nelle stringhe (`LIKE N'%Zeta%'`, `'Zeta Spa'`, `N'ZETA\mario'` come valore): oggi li segnala
+  solo l'anti-fuga (Bloccante).
 
 ## Stato della fase 1 (10/11/2026)
 

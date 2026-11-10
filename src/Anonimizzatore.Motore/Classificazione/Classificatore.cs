@@ -201,6 +201,17 @@ public sealed class Classificatore : TSqlFragmentVisitor
             case AddMemberAlterRoleAction n: PrincipaleAmbiguo(n.Member); break;
             case DropMemberAlterRoleAction n: PrincipaleAmbiguo(n.Member); break;
             case RenameAlterRoleAction n: Principale(n.NewName, Ruolo.RuoloDb); break;
+            // --- gruppi di disponibilità (Always On) ---
+            case AvailabilityGroupStatement n:
+                Aggiungi(n.Name, Ruolo.GruppoDisponibilita, sistema: false);
+                foreach (var database in n.Databases) AggiungiDatabase(database);
+                foreach (var replica in n.Replicas) Stringa(replica.ServerName, Ruolo.Server, sistema: false);
+                break;
+            case DropAvailabilityGroupStatement n: Aggiungi(n.Name, Ruolo.GruppoDisponibilita, sistema: false); break;
+            case HadrAvailabilityGroupDatabaseOption { GroupName: not null } n:
+                Aggiungi(n.GroupName, Ruolo.GruppoDisponibilita, sistema: false);
+                break;
+
             case DropUnownedObjectStatement n: PrevediDropPrincipale(n); break;
             case SecurityStatement n: Permessi(n); break;
             case AlterAuthorizationStatement n:

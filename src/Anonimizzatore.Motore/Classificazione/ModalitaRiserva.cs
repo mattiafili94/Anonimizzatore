@@ -46,7 +46,7 @@ public static class ModalitaRiserva
     private static readonly Ruolo[] PrioritaRuoli =
     [
         Ruolo.Tabella, Ruolo.Vista, Ruolo.Procedura, Ruolo.Funzione, Ruolo.Trigger, Ruolo.Schema, Ruolo.Database,
-        Ruolo.LinkedServer, Ruolo.Server, Ruolo.Job, Ruolo.Colonna, Ruolo.Alias, Ruolo.Login, Ruolo.Utente, Ruolo.RuoloDb,
+        Ruolo.LinkedServer, Ruolo.Server, Ruolo.Job, Ruolo.GruppoDisponibilita, Ruolo.Colonna, Ruolo.Alias, Ruolo.Login, Ruolo.Utente, Ruolo.RuoloDb,
     ];
 
     public static RisultatoClassificazione Classifica(
@@ -93,7 +93,25 @@ public static class ModalitaRiserva
                 continue;
             }
 
+            // Server scritto come stringa: REPLICA ON N'SRVSQL02', ADD LISTENER N'LSNVendite'
+            if (t.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral
+                && k > 0 && ServerDaStringa(token, sig, k))
+            {
+                var valore = NomeDaStringa(t.Text);
+                if (valore.Length > 0 && !valore.Contains("$(", StringComparison.Ordinal))
+                    nomi.TryAdd(idx, new NomeTrovato(idx, Ruolo.Server, valore, QuoteType.NotQuoted, false, DaStringa: true));
+                continue;
+            }
+
             if (!EParte(t)) continue;
+
+            // Gruppo di disponibilità: AVAILABILITY GROUP nome, SET HADR AVAILABILITY GROUP = nome
+            if (EGruppoDisponibilita(token, sig, k) && !EVariabileSqlcmd(t))
+            {
+                var nomeGruppo = NomeSql.Normalizza(t.Text);
+                nomi.TryAdd(idx, new NomeTrovato(idx, Ruolo.GruppoDisponibilita, nomeGruppo, Apici(t.Text), false));
+                continue;
+            }
 
             // Un nome a più parti: a.b.c.d (una variabile SQLCMD $(Db) ne fa parte ma non è un nome da cambiare)
             var parti = new List<int> { idx };
@@ -105,6 +123,13 @@ public static class ModalitaRiserva
             }
 
             var precedente = k > 0 ? token[sig[k - 1]].TokenType : TSqlTokenType.EndOfFile;
+            // FROM DISK = '...', FROM WINDOWS, FROM URL = '...': parole chiave, non tabelle
+            if (precedente == TSqlTokenType.From && parti.Count == 1 && ParoleDopoFrom.Contains(NomeSql.Normalizza(t.Text)))
+            {
+                k = j;
+                continue;
+            }
+
             if (Contesti.TryGetValue(precedente, out var ruoloUltima))
                 ClassificaNomeDiOggetto(token, parti, ruoloUltima, conoscenza, nomi);
             else
@@ -114,6 +139,33 @@ public static class ModalitaRiserva
         }
 
         return new RisultatoClassificazione([.. nomi.Values.OrderBy(n => n.IndiceToken)], [], [.. segreti.Values.OrderBy(s => s.IndiceToken)], []);
+    }
+
+    // Dopo FROM non sono nomi di tabella: RESTORE ... FROM DISK, CREATE LOGIN ... FROM WINDOWS, BACKUP ... FROM URL
+    private static readonly HashSet<string> ParoleDopoFrom = new(NomeSql.Confronto)
+    {
+        "DISK", "TAPE", "URL", "VIRTUAL_DEVICE", "WINDOWS", "CERTIFICATE", "ASYMMETRIC", "EXTERNAL", "PROVIDER",
+    };
+
+    private static bool Parola(IList<TSqlParserToken> token, IList<int> sig, int posizione, string testo) =>
+        posizione >= 0 && token[sig[posizione]].Text.Equals(testo, StringComparison.OrdinalIgnoreCase);
+
+    // La stringa dopo REPLICA ON o dopo LISTENER è il nome di un server (o di un listener, che è un nome di rete).
+    private static bool ServerDaStringa(IList<TSqlParserToken> token, IList<int> sig, int k) =>
+        Parola(token, sig, k - 1, "LISTENER") || (Parola(token, sig, k - 1, "ON") && Parola(token, sig, k - 2, "REPLICA"));
+
+    // AVAILABILITY GROUP nome  /  AVAILABILITY GROUP = nome
+    private static bool EGruppoDisponibilita(IList<TSqlParserToken> token, IList<int> sig, int k)
+    {
+        var p = k - 1;
+        if (p >= 0 && token[sig[p]].TokenType == TSqlTokenType.EqualsSign) p--;
+        return p >= 1 && token[sig[p]].TokenType == TSqlTokenType.Group && Parola(token, sig, p - 1, "AVAILABILITY");
+    }
+
+    private static string NomeDaStringa(string testo)
+    {
+        var t = testo.StartsWith('N') || testo.StartsWith('n') ? testo[1..] : testo;
+        return t.Length >= 2 && t[0] == '\'' && t[^1] == '\'' ? t[1..^1].Replace("''", "'") : t;
     }
 
     private static void ClassificaNomeDiOggetto(

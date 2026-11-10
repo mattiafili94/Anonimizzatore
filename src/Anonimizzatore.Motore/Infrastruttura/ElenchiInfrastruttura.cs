@@ -46,7 +46,7 @@ internal static partial class ElenchiInfrastruttura
         "errorlog", "agent", "files", "file", "program", "microsoft", "server", "mssql", "mssqlserver", "windows", "users",
         "user", "public", "default", "pipe", "query",
         // prefissi dei nomi già anonimizzati: così analizzare due volte lo stesso testo non cambia nulla
-        "srv", "dom", "dir", "ip", "mail", "sch", "tbl", "vw", "usp", "fn", "trg", "usr", "rol",
+        "srv", "dom", "ag", "dir", "ip", "mail", "sch", "tbl", "vw", "usp", "fn", "trg", "usr", "rol",
     };
 
     public static readonly HashSet<string> DatabaseDiSistema = new(NomeSql.Confronto)
@@ -79,6 +79,16 @@ internal static partial class ElenchiInfrastruttura
         "com", "net", "org", "edu", "gov", "info", "biz", "eu", "it", "local", "lan", "corp", "internal",
         "intranet", "localdomain", "priv", "invalid", "test", "de", "fr", "es", "uk", "ch", "at", "nl", "be", "pt",
         "pl", "se", "no", "dk", "fi", "ie", "us", "ca", "io", "co", "cloud", "app", "dev", "home", "domain",
+    };
+
+    /// <summary>
+    /// Etichette pubbliche dei servizi cloud (<c>conto.blob.core.windows.net</c>, <c>srv.database.windows.net</c>,
+    /// <c>x.eu-west-1.rds.amazonaws.com</c>): dopo la prima etichetta restano in chiaro, non dicono nulla del cliente.
+    /// </summary>
+    public static readonly HashSet<string> EtichetteCloud = new(NomeSql.Confronto)
+    {
+        "blob", "core", "windows", "database", "file", "queue", "table", "dfs", "web", "azure", "azurewebsites",
+        "azure-api", "azurecr", "amazonaws", "rds", "s3", "cloudapp", "cloudfront", "googleapis", "servicebus", "vault",
     };
 
     /// <summary>Etichette tipiche di T-SQL che non sono mai parte di un host.</summary>

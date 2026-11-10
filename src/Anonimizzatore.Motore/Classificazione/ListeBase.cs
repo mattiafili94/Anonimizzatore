@@ -33,6 +33,15 @@ public static class ListeBase
         "syscurconfigs", "sysconfigures", "syslanguages", "syslockinfo", "sysmembers", "sysxlogins", "sysdevices",
     };
 
+    // Tabelle di msdb che si interrogano spesso anche senza prefisso del database (dopo USE msdb) o con dbo davanti.
+    private static readonly HashSet<string> TabelleMsdb = new(NomeSql.Confronto)
+    {
+        "sysjobs", "sysjobsteps", "sysjobhistory", "sysjobschedules", "sysjobservers", "sysjobactivity", "sysschedules",
+        "syscategories", "sysoperators", "sysalerts", "sysproxies", "sysnotifications", "systargetservers",
+        "backupset", "backupfile", "backupfilegroup", "backupmediaset", "backupmediafamily", "restorehistory", "restorefile",
+        "restorefilegroup", "suspect_pages", "logmarkhistory", "sysssispackages", "sysdac_instances",
+    };
+
     private static readonly string[] PrefissiProcedureSistema =
     [
         "sp_help", "sp_cursor", "sp_trace_", "sp_xml_", "sp_cdc_", "sp_fulltext_", "sp_replication", "sp_repl",
@@ -187,7 +196,9 @@ public static class ListeBase
             Ruolo.Procedura => ProcedureSistema.Contains(nome)
                                || PrefissiProcedureSistema.Any(p => nome.StartsWith(p, StringComparison.OrdinalIgnoreCase)),
             Ruolo.Funzione => FunzioniSistema.Contains(nome),
-            Ruolo.Tabella or Ruolo.Vista => VisteLegacy.Contains(nome),
+            Ruolo.Tabella or Ruolo.Vista => VisteLegacy.Contains(nome) || TabelleMsdb.Contains(nome)
+                                            || nome.StartsWith("sysmail_", StringComparison.OrdinalIgnoreCase)
+                                            || nome.StartsWith("log_shipping_", StringComparison.OrdinalIgnoreCase),
             _ => false,
         };
     }

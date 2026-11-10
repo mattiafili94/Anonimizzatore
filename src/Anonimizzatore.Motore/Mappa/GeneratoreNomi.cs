@@ -7,7 +7,7 @@ namespace Anonimizzatore.Motore.Mappa;
 public static class GeneratoreNomi
 {
     // Famiglie con pochi elementi: numero a 2 cifre (srv_01). Le altre a 3 cifre (tbl_001).
-    private static readonly HashSet<string> DueCifre = ["srv", "db", "sch", "dom"];
+    private static readonly HashSet<string> DueCifre = ["srv", "db", "sch", "dom", "ag"];
 
     /// <param name="ruolo">Ruolo del nome.</param>
     /// <param name="numero">Numero progressivo nella famiglia (da 1).</param>

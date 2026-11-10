@@ -387,7 +387,7 @@ else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
     private static readonly GruppoRuoli[] Gruppi =
     [
         new("Oggetti", [Ruolo.Server, Ruolo.LinkedServer, Ruolo.Database, Ruolo.Schema, Ruolo.Tabella, Ruolo.Vista,
-            Ruolo.Procedura, Ruolo.Funzione, Ruolo.Trigger, Ruolo.Job]),
+            Ruolo.Procedura, Ruolo.Funzione, Ruolo.Trigger, Ruolo.Job, Ruolo.GruppoDisponibilita]),
         new("Sicurezza", [Ruolo.Login, Ruolo.Utente, Ruolo.RuoloDb, Ruolo.Dominio]),
         new("Colonne e variabili", [Ruolo.Colonna, Ruolo.Variabile, Ruolo.Parametro, Ruolo.Temporanea, Ruolo.Alias]),
         new("Indici e vincoli", [Ruolo.Indice, Ruolo.PrimaryKey, Ruolo.ForeignKey, Ruolo.Default, Ruolo.Check, Ruolo.Unique]),
@@ -542,6 +542,7 @@ else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
         Ruolo.Funzione => "Funzioni",
         Ruolo.Trigger => "Trigger",
         Ruolo.Job => "Job di SQL Agent",
+        Ruolo.GruppoDisponibilita => "Gruppi di disponibilità (AG)",
         Ruolo.Login => "Login",
         Ruolo.Utente => "Utenti",
         Ruolo.RuoloDb => "Ruoli",
@@ -575,6 +576,7 @@ else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
         Ruolo.Funzione => "fn_001",
         Ruolo.Trigger => "trg_001",
         Ruolo.Job => "job_001",
+        Ruolo.GruppoDisponibilita => "ag_01",
         Ruolo.Login or Ruolo.Utente => "usr_001",
         Ruolo.RuoloDb => "rol_001",
         Ruolo.Dominio => "dom_01",

@@ -24,6 +24,7 @@ public static partial class GeneratoreLegenda
         (@"\bfn_\d{3,}\b", "fn_001", "funzione"),
         (@"\btrg_\d{3,}\b", "trg_001", "trigger"),
         (@"\bjob_\d{3,}\b", "job_001", "job di SQL Agent"),
+        (@"\bag_\d{2,}\b", "ag_01", "gruppo di disponibilità (Always On)"),
         (@"\busr_\d{3,}\b", "usr_001", "login o utente"),
         (@"\brol_\d{3,}\b", "rol_001", "ruolo"),
         (@"\bix_\d{3,}\b", "ix_001", "indice"),
