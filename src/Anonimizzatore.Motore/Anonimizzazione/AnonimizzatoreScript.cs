@@ -102,7 +102,8 @@ public static partial class AnonimizzatoreScript
         public SqlDinamico.Dizionario Dizionario { get; set; } = new(mappa);
     }
 
-    public static RisultatoAnonimizzazione Anonimizza(IReadOnlyList<string> script, Profilo profilo, MappaCliente mappa)
+    public static RisultatoAnonimizzazione Anonimizza(
+        IReadOnlyList<string> script, Profilo profilo, MappaCliente mappa, SchemaDb.SchemaDatabase? schema = null)
     {
         ArgumentNullException.ThrowIfNull(script);
         ArgumentNullException.ThrowIfNull(profilo);
@@ -144,6 +145,7 @@ public static partial class AnonimizzatoreScript
 
         // Giro 1 su tutte le unità: i CREATE e i tipi di una servono a classificare i riferimenti delle altre.
         var conoscenza = Conoscenza.Da(mappa);
+        if (schema is not null) SeminaSchema(schema, conoscenza, mappa);
         foreach (var u in unita.Where(u => u.Letto.Valido))
         {
             u.Pre = new PreAnalisi(conoscenza);
@@ -368,7 +370,7 @@ public static partial class AnonimizzatoreScript
     /// già un nome anonimo (i nomi assegnati restano stabili: si cambiano solo con "rigenera nomi"); altrimenti
     /// anonimizzato.
     /// </summary>
-    private sealed class Liste(Profilo profilo, MappaCliente mappa)
+    internal sealed class Liste(Profilo profilo, MappaCliente mappa)
     {
         private readonly Blacklist _blacklist = new(profilo.Blacklist);
         private readonly Whitelist _whitelist = new(profilo.Whitelist);
@@ -398,7 +400,7 @@ public static partial class AnonimizzatoreScript
     // --- nomi composti ---
 
     /// <summary>Nomi originali di oggetti già anonimizzati con il loro nome anonimo, dal più lungo al più corto.</summary>
-    private static IReadOnlyList<(string Originale, string Anonimo)> PartiSostituibili(MappaCliente mappa) =>
+    internal static IReadOnlyList<(string Originale, string Anonimo)> PartiSostituibili(MappaCliente mappa) =>
         [.. mappa.Voci
             .Where(v => RuoliDelleParti.Contains(v.Ruolo))
             .Select(v => (v.Originale, v.Anonimo))

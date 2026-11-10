@@ -53,4 +53,28 @@ public static partial class CodiceTipo
         if (p1.Length == 0) return sigla;
         return p2.Length == 0 ? $"{sigla}{p1}" : $"{sigla}{p1}_{p2}";
     }
+
+    // Dalla sigla al nome del tipo ("vc" → varchar). Con due tipi per la stessa sigla vale il primo (rowversion/timestamp).
+    private static readonly Dictionary<string, string> SigleInverse = Sigle
+        .GroupBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(g => g.Key, g => g.First().Key, StringComparer.OrdinalIgnoreCase);
+
+    [GeneratedRegex(@"^(?<sigla>[a-z]+)(?<p1>max|\d+)(?:_(?<p2>\d+))?$", RegexOptions.IgnoreCase)]
+    private static partial Regex FormaCodice();
+
+    /// <summary>
+    /// L'inverso di <see cref="Da"/>, per la legenda: <c>vc50</c> → <c>varchar(50)</c>, <c>dec18_2</c> → <c>decimal(18,2)</c>,
+    /// <c>int</c> → <c>int</c>. <c>null</c> se il codice è <see cref="Ignoto"/> o non si riconosce.
+    /// </summary>
+    public static string? Descrivi(string codice)
+    {
+        if (string.IsNullOrWhiteSpace(codice) || codice.Equals(Ignoto, StringComparison.OrdinalIgnoreCase)) return null;
+        if (SigleInverse.TryGetValue(codice, out var semplice)) return semplice;
+
+        var m = FormaCodice().Match(codice);
+        if (!m.Success || !SigleInverse.TryGetValue(m.Groups["sigla"].Value, out var nome) || !ConLunghezza.Contains(nome)) return null;
+
+        var p2 = m.Groups["p2"].Success ? "," + m.Groups["p2"].Value : "";
+        return $"{nome}({m.Groups["p1"].Value.ToLowerInvariant()}{p2})";
+    }
 }

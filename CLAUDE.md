@@ -189,10 +189,29 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     righe SQLCMD dentro una stringa su più righe o un commento non `/* */` (es. `--`) sono lette come SQLCMD solo se
     iniziano la riga; `:setvar` con nome non riconoscibile e valore sconosciuto resta in chiaro (si vede dal dizionario solo
     dopo che il nome è comparso altrove).
-- **Prossimo passo**: tappa 11 (legenda e testo unico da copiare: convenzione dei nomi per l'IA, schema anonimizzato allegato se
-  c'è lo schema importato, script separati da `-- Script 1`, `-- Script 2`...). Poi 12 (de-anonimizzazione: report completo) e
-  13 (controllo anti-fuga: nomi originali e blacklist nell'output + nuova lettura di validità; testi liberi, descrizioni dei
-  job, `NAME` dei backup).
+- **Tappa 11 fatta** (10/11/2026): legenda, testo unico e schema allegato, 536 test verdi. Novità:
+  - **`TestoPerIA.Componi(risultato, mappa, schema?, profilo?)`** → `TestoUnico(Testo, ScriptEsclusi)`: legenda, poi (se c'è lo
+    schema) lo schema anonimizzato, poi gli script con `-- Script N` (solo se sono più di uno; il numero è quello originale).
+    Uno script non anonimizzabile (`Testo = null`) resta fuori e lo dice `ScriptEsclusi`: mai copiare nomi in chiaro;
+  - **`GeneratoreLegenda.Genera(testo)`**: spiega **solo le convenzioni presenti nel testo** (tbl_, vw_, usp_..., `col_<tipo>_NNN`
+    con i tipi usati: `vc50 = varchar(50)`, `x = tipo non noto`, `@v_/@p_`, nomi composti di constraint, `/* c001 */`,
+    `<password>`, SID). Parte fissa: usa questi nomi tali e quali, non indovinare quelli veri, i nomi senza prefisso sono veri.
+    Tutte le righe sono commenti `--`. `CodiceTipo.Descrivi` è l'inverso di `CodiceTipo.Da`;
+  - **schema "in memoria"** (`SchemaDb`: `SchemaDatabase`, `TabellaSchema`, `ColonnaSchema`, chiave primaria, chiavi esterne,
+    indici, `EVista`): la query di import e la schermata sono della fase 2. `AnonimizzatoreScript.Anonimizza(..., schema?)` lo
+    usa per i **tipi delle colonne** (`col_vc20_001` invece di `col_x_001`), per riconoscere le **viste** senza il loro
+    `CREATE` e per i **nomi riservati**; un `CREATE` nello script ha la precedenza;
+  - **`SchemaAnonimizzato.Genera(schema, testi, profilo, mappa)`**: DDL (`CREATE TABLE`, `ALTER TABLE ... FOREIGN KEY`,
+    `CREATE INDEX`; le viste come commento con le colonne) delle tabelle **citate** negli script (per nome anonimo, o vero se
+    resta in chiaro) più quelle a cui puntano le loro chiavi esterne; stessi nomi degli script (`DecisoreNomi`: sistema,
+    blacklist, matrice, whitelist; indici/constraint con le parti sostituite); è T-SQL valido e si de-anonimizza.
+  - **Limiti noti**: la legenda e lo schema sono in italiano; con lo schema un nome nuovo (tabella non citata ma referenziata) crea
+    voci in mappa; le viste dello schema non hanno la definizione (solo le colonne).
+- **Prossimo passo**: tappa 12 (de-anonimizzazione: rifinire e fare il **report** completo per la fase 2: sostituzioni, token senza
+  corrispondenza, segnaposto commento persi, password/SID non ripristinabili, nomi che l'IA ha cambiato di maiuscole) e tappa 13
+  (**controllo anti-fuga**: cerca nell'output i nomi originali anonimizzati e le parole della blacklist, ri-legge il risultato
+  per verificare che sia T-SQL valido; segnala testi liberi, descrizioni dei job, `NAME` dei backup, percorsi degli URL; copia
+  bloccata finché l'utente non conferma). Poi la tappa 14: giro con gli script reali di Mattia in `prove-locali/`.
 
 ## Regole fisse (repo pubblica)
 
