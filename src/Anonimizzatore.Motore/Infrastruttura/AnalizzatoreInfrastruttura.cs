@@ -68,6 +68,17 @@ public sealed partial class AnalizzatoreInfrastruttura
         return new RisultatoInfrastruttura(sb.ToString(), sostituzioni, piano.Avvisi);
     }
 
+    /// <summary>
+    /// Un server scritto da solo, con l'eventuale istanza e porta (<c>SRVSQL02\ISTANZA1,1433</c> →
+    /// <c>srv_04\srv_05,1433</c>): lo stesso risultato che si ha dentro una stringa di connessione, così lo stesso
+    /// server ha lo stesso nome ovunque. Per <c>@datasrc</c> di <c>sp_addlinkedserver</c>.
+    /// </summary>
+    public string AnonimizzaServer(string server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        return server.Length == 0 ? server : ElaboraServerConnessione(server);
+    }
+
     // ───────────────────────────── Ripristino ─────────────────────────────
 
     /// <summary>
@@ -97,6 +108,55 @@ public sealed partial class AnalizzatoreInfrastruttura
     }
 
     private static readonly HashSet<string> FamiglieRipristinabili = ["srv", "db", "dom", "dir", "file", "ip", "mail"];
+
+    // Famiglie che esistono solo come infrastruttura: si possono ripristinare ovunque. srv, db e dom invece sono anche
+    // nomi di oggetti SQL (con le parentesi quadre se servono): lì ci pensa il DeAnonimizzatore dei nomi.
+    private static readonly HashSet<string> FamiglieSoloInfrastruttura = ["dir", "file", "ip", "mail"];
+
+    /// <summary>
+    /// Ripristino per il testo libero della risposta dell'IA (prosa + codice). Come <see cref="Ripristina"/>, ma
+    /// <c>srv_01</c>, <c>db_01</c> e <c>dom_01</c> si rimettono solo dentro percorsi, URL, stringhe di connessione e host
+    /// (<c>\\srv_01\dir_001\db_01.bak</c>, <c>srv_01.dom_01.local</c>): fuori, nel codice SQL, sono nomi di oggetti e
+    /// vanno ripristinati con le parentesi giuste dal <c>DeAnonimizzatore</c>. <c>dir_</c>, <c>file_</c>, <c>ip_</c> e
+    /// <c>mail_</c> si rimettono ovunque.
+    /// </summary>
+    public RisultatoRipristino RipristinaNeiContesti(string testoAnonimo)
+    {
+        ArgumentNullException.ThrowIfNull(testoAnonimo);
+
+        // Dove il testo ha la forma di un percorso, un URL, una stringa di connessione o un host: solo le posizioni,
+        // senza calcolare nulla (sul testo anonimo non c'è niente da anonimizzare e la mappa non deve cambiare).
+        var piano = new Piano { SoloPosizioni = true };
+        TrovaUrl(testoAnonimo, piano);
+        TrovaPercorsiUnc(testoAnonimo, piano);
+        TrovaPercorsiLocali(testoAnonimo, piano);
+        TrovaPercorsiUnix(testoAnonimo, piano);
+        TrovaStringheConnessione(testoAnonimo, piano);
+        foreach (Match m in HostAnonimo().Matches(testoAnonimo).Where(m => SonoHostAnonimi(m.Value)))
+            piano.Aggiungi(m.Index, m.Index + m.Length, TipoInfrastruttura.Host, () => "");
+        var contesti = piano.Pezzi.Select(p => (p.Inizio, p.Fine)).ToList();
+
+        var sostituzioni = new List<Sostituzione>();
+        var nonTrovati = new List<string>();
+        var testo = NomeAnonimo().Replace(testoAnonimo, m =>
+        {
+            var voce = _mappa.TrovaOriginale(m.Value);
+            var famiglia = voce is null ? "" : FamigliaRuolo.Di(voce.Ruolo);
+            if (voce is null || !FamiglieRipristinabili.Contains(famiglia))
+            {
+                if (!nonTrovati.Contains(m.Value, NomeSql.Confronto)) nonTrovati.Add(m.Value);
+                return m.Value;
+            }
+
+            var inUnContesto = contesti.Any(c => m.Index >= c.Inizio && m.Index < c.Fine);
+            if (!FamiglieSoloInfrastruttura.Contains(famiglia) && !inUnContesto) return m.Value;
+
+            sostituzioni.Add(new Sostituzione(TipoDi(voce.Ruolo), m.Value, voce.Originale, m.Index));
+            return voce.Originale;
+        });
+
+        return new RisultatoRipristino(testo, sostituzioni, nonTrovati);
+    }
 
     private static TipoInfrastruttura TipoDi(Ruolo ruolo) => ruolo switch
     {
@@ -418,8 +478,42 @@ public sealed partial class AnalizzatoreInfrastruttura
                 eDatabase ? ElaboraDatabaseConnessione(testo) : ElaboraServerConnessione(testo));
         }
 
-        if (Credenziali().IsMatch(t))
-            piano.Avvisi.Add("Stringa di connessione con credenziali (User ID / Password): non sono gestite da questo analizzatore, controlla a mano.");
+        // Credenziali: la password viene cancellata (e non salvata da nessuna parte), lo user viene anonimizzato.
+        var conCredenziali = false;
+        foreach (Match m in CoppiaCredenziali().Matches(t))
+        {
+            var valore = m.Groups["v"];
+            var testo = valore.Value.TrimEnd();
+            if (testo.Length == 0) continue;
+            conCredenziali = true;
+
+            if (Regex.IsMatch(m.Groups["k"].Value, @"^(?:Password|Pwd)$", RegexOptions.IgnoreCase))
+                piano.Aggiungi(valore.Index, valore.Index + testo.Length, TipoInfrastruttura.StringaConnessione,
+                    () => PasswordSegnaposto);
+            else
+                piano.Aggiungi(valore.Index, valore.Index + testo.Length, TipoInfrastruttura.StringaConnessione,
+                    () => ElaboraUtenteConnessione(testo));
+        }
+
+        if (conCredenziali)
+            piano.Avvisi.Add("Stringa di connessione con credenziali (User ID / Password): la password è stata sostituita da "
+                             + PasswordSegnaposto + " e NON salvata nella mappa, quindi non verrà ripristinata.");
+    }
+
+    /// <summary>Segnaposto di una password cancellata: lo stesso usato dallo script (<c>'&lt;password&gt;'</c>).</summary>
+    public const string PasswordSegnaposto = "<password>";
+
+    /// <summary>User ID di una stringa di connessione: <c>sa</c> e gli account di sistema restano; <c>DOMINIO\utente</c> si spezza.</summary>
+    private string ElaboraUtenteConnessione(string utente)
+    {
+        if (utente.Equals("sa", StringComparison.OrdinalIgnoreCase) || utente.Contains(PasswordSegnaposto)
+            || Classificazione.ListeBase.PrincipaleDiSistema(utente) || GiaAnonimo(utente) || utente.StartsWith("usr_", StringComparison.OrdinalIgnoreCase))
+            return utente;
+
+        var barra = utente.IndexOf('\\');
+        if (barra > 0 && barra < utente.Length - 1)
+            return _mappa.Ottieni(Ruolo.Dominio, utente[..barra]) + "\\" + _mappa.Ottieni(Ruolo.Utente, utente[(barra + 1)..]);
+        return _mappa.Ottieni(Ruolo.Utente, utente);
     }
 
     private string ElaboraDatabaseConnessione(string valore) =>
@@ -554,10 +648,13 @@ public sealed partial class AnalizzatoreInfrastruttura
         public List<Pezzo> Pezzi { get; } = [];
         public List<string> Avvisi { get; } = [];
 
+        /// <summary>Se vero si registrano solo le posizioni: nessuna sostituzione viene calcolata e la mappa non cambia.</summary>
+        public bool SoloPosizioni { get; init; }
+
         public void Aggiungi(int inizio, int fine, TipoInfrastruttura tipo, Func<string> calcola)
         {
             if (Pezzi.Any(p => inizio < p.Fine && p.Inizio < fine)) return; // già preso da un rilevatore precedente
-            Pezzi.Add(new Pezzo(inizio, fine, tipo, calcola()));
+            Pezzi.Add(new Pezzo(inizio, fine, tipo, SoloPosizioni ? "" : calcola()));
         }
     }
 
@@ -598,8 +695,18 @@ public sealed partial class AnalizzatoreInfrastruttura
     [GeneratedRegex(@"(?<![\w@])(?<k>Data\s+Source|Server|Address|Addr|Network\s+Address|Host|Database|Initial\s+Catalog)\s*=\s*(?<v>[^;'""\r\n]*)", RegexOptions.IgnoreCase)]
     private static partial Regex CoppiaConnessione();
 
-    [GeneratedRegex(@"(?<![\w@])(?:User\s*ID|UID|Password|Pwd)\s*=\s*[^;'""\r\n]+", RegexOptions.IgnoreCase)]
-    private static partial Regex Credenziali();
+    [GeneratedRegex(@"(?<![\w@])(?<k>User\s*ID|UID|Password|Pwd)\s*=\s*(?<v>[^;'""\r\n]*)", RegexOptions.IgnoreCase)]
+    private static partial Regex CoppiaCredenziali();
+
+    // Un nome di host fatto di nomi anonimi: srv_01.dom_01.local. Le etichette vengono poi controllate (vedi
+    // SonoHostAnonimi): senza controllo si confonderebbe con un nome SQL a più parti come srv_01.db_01.dbo.
+    [GeneratedRegex(@"(?<![\w.\\/@\-])(?:srv|dom)_\d{2,}(?:\.[A-Za-z0-9_\-]+)+(?![\w\-])", RegexOptions.IgnoreCase)]
+    private static partial Regex HostAnonimo();
+
+    /// <summary>Un host anonimo è <c>srv_NN</c> o <c>dom_NN</c> seguito da <c>dom_NN</c> o da un suffisso di dominio noto (<c>local</c>, <c>com</c>...).</summary>
+    private static bool SonoHostAnonimi(string host) =>
+        host.Split('.').Skip(1).All(e => Regex.IsMatch(e, @"^dom_\d{2,}$", RegexOptions.IgnoreCase)
+                                         || ElenchiInfrastruttura.TldTestoLibero.Contains(e));
 
     [GeneratedRegex(@"^(?:tcp|np|lpc):", RegexOptions.IgnoreCase)]
     private static partial Regex PrefissoProtocollo();

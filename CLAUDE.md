@@ -43,8 +43,7 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   - `Infrastruttura/AnalizzatoreInfrastruttura` (parte testo della tappa 8): percorsi, IP, host, email, URL, stringhe
     di connessione, con metodo inverso `Ripristina`. Ha aggiunto i ruoli `Cartella`, `File`, `Ip`, `Email` in
     `Ruolo` (famiglie `dir`, `file`, `ip`, `mail`).
-  Agganciati finora: `DeAnonimizzatore` (dalla tappa 4) e `GestoreCommenti` (tappa 6). Da agganciare: il
-  `DeAnonimizzatore` dovrà ripristinare anche i valori dell'infrastruttura (`AnalizzatoreInfrastruttura`, tappa 8-9).
+  Agganciati tutti e tre: `DeAnonimizzatore` (tappa 4), `GestoreCommenti` (tappa 6), `AnalizzatoreInfrastruttura` (tappa 8).
 - **Tappa 4 fatta** (10/11/2026): colonne, variabili, parametri, alias, indici e constraint, 331 test verdi. Novità:
   - tipi ricavati dallo script (`Conoscenza.DichiaraTipo`): CREATE/ALTER TABLE, parametri, DECLARE (dichiarati) e
     CAST/CONVERT (dedotti, valgono solo se manca il dichiarato) → `col_vc20_001`, `@p_vc20_001`, altrimenti `col_x_`;
@@ -111,10 +110,34 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     risulta "con errori" e non viene restituito.
   - Non ancora coperti: nomi di certificati/chiavi/credenziali, proprietario di certificati, job di SQL Agent
     (`sp_add_job @owner_login_name`), `datasrc`/`provstr` di `sp_addlinkedserver` (tappa 9).
-- **Prossimo passo**: tappa 8 (infrastruttura, livello 3: agganciare `AnalizzatoreInfrastruttura` ai letterali stringa
-  dello script: percorsi di backup/restore, `datasrc` dei server collegati, host, IP, email, URL) e tappa 9 (SQL dinamico
-  ricorsivo, `sp_executesql`, `@command` di `sp_add_jobstep`). Poi 10-13 (SQLCMD/modalità di riserva, legenda,
-  de-anonimizzazione completa, anti-fuga).
+- **Tappa 8 fatta** (10/11/2026): infrastruttura (livello 3), 424 test verdi. Novità:
+  - **fase C** di `AnonimizzatoreScript`: ogni letterale stringa non già trattato come nome/segreto passa da
+    `AnalizzatoreInfrastruttura` (percorsi UNC/locali, IP, host, email, URL, stringhe di connessione). Dopo le fasi A e B,
+    così `Vendite.bak` diventa `db_01.bak` se `Vendite` è già `db_01`; altrimenti `file_NNN`. Avvisi con il numero di riga;
+  - nomi di **database** in `BACKUP/RESTORE DATABASE`, `ALTER DATABASE` (anche `MODIFY NAME`), `DROP DATABASE`,
+    `DBCC CHECKDB/CHECKALLOC/CHECKCATALOG/CHECKFILEGROUP/SHRINKDATABASE/UPDATEUSAGE` (con o senza apici): prima restavano
+    in chiaro. Nomi **logici di file** (`RESTORE ... MOVE`, `CREATE DATABASE ... NAME =`, `DBCC SHRINKFILE`) e dispositivi di
+    backup → `Ruolo.File` (`file_001`);
+  - `sp_addlinkedserver`: `@datasrc`/`@location` sono un server (`AnonimizzaServer`: stesso risultato di una stringa di
+    connessione, `SRVSQL02\ISTANZA1` → `srv_02\srv_03` ovunque), `@catalog` un database, `@provstr` va al passo stringhe;
+  - **credenziali nelle stringhe di connessione** (modifica a `AnalizzatoreInfrastruttura`, prima le lasciava e avvisava):
+    `Password=`/`Pwd=` → `<password>` (mai in mappa), `User ID=`/`UID=` → `usr_NNN` (`DOM\x` → `dom_NN\usr_NN`; `sa` e
+    account di sistema restano);
+  - **ripristino per contesto** (`RipristinaNeiContesti`, usato dal `DeAnonimizzatore` per primo, poi nomi, poi commenti):
+    `dir_`, `file_`, `ip_`, `mail_` si ripristinano ovunque; `srv_`, `db_`, `dom_` solo dentro percorsi, URL, stringhe di
+    connessione e host (`srv_01.dom_01.local`), altrimenti nel codice ci pensa il ripristino dei nomi, che aggiunge le
+    parentesi quadre (`[SRV-REMOTO].[Vendite-Nuove]`). Il riconoscimento degli host anonimi accetta dopo il primo pezzo solo
+    `dom_NN` o un suffisso noto (`local`, `com`...), così non scambia `srv_01.db_01.dbo` per un host;
+  - non più eseguiti (non provabili con il parser 170): le opzioni `PASSWORD`/`MEDIAPASSWORD` di `BACKUP`/`RESTORE`. Uno
+    script che le usa dà errore di sintassi e non viene restituito.
+  - **Limiti noti**: i testi liberi nelle stringhe (`BACKUP ... NAME = N'Vendite full'`, il percorso di un URL
+    `/report/vendite`, messaggi di `PRINT/RAISERROR`) restano in chiaro (livello 4, v1 fuori; li segnalerà l'anti-fuga della
+    tappa 13); le voci della matrice per `Cartella`/`File`/`Ip`/`Email` non sono ancora rispettate (l'analizzatore
+    anonimizza sempre); la blacklist non entra ancora nelle stringhe.
+- **Prossimo passo**: tappa 9 (SQL dinamico: stringa completa analizzata come T-SQL in modo ricorsivo con apici raddoppiati,
+  `EXEC('...')`, `sp_executesql`, `@command` di `sp_add_jobstep`; frammenti concatenati → sostituzione per dizionario +
+  avviso; commenti dentro il SQL dinamico). Poi 10-13 (SQLCMD/modalità di riserva, legenda, de-anonimizzazione completa,
+  anti-fuga).
 
 ## Regole fisse (repo pubblica)
 

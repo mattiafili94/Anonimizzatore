@@ -339,8 +339,19 @@ public class AnalizzatoreInfrastrutturaTest
     {
         var (_, a) = Nuovo();
         var r = a.Anonimizza(@"Server=SRVSQL01\ISTANZA1,1433;Database=Vendite;User ID=sa;Password=XXXX;");
-        Assert.Equal(@"Server=srv_01\srv_02,1433;Database=db_01;User ID=sa;Password=XXXX;", r.Testo);
+        // La password viene cancellata (e non salvata); "sa" resta perché è l'utente di sistema.
+        Assert.Equal(@"Server=srv_01\srv_02,1433;Database=db_01;User ID=sa;Password=<password>;", r.Testo);
         Assert.Contains(r.Avvisi, x => x.Contains("credenziali"));
+    }
+
+    [Fact]
+    public void Stringa_di_connessione_user_e_password_vengono_anonimizzati_e_cancellati()
+    {
+        var (mappa, a) = Nuovo();
+        var r = a.Anonimizza(@"Data Source=SRVSQL01;Initial Catalog=Vendite;UID=ACMEDOM\svc_app;Pwd=Segr3ta!;");
+
+        Assert.Equal(@"Data Source=srv_01;Initial Catalog=db_01;UID=dom_01\usr_001;Pwd=<password>;", r.Testo);
+        Assert.DoesNotContain(mappa.Voci, v => v.Originale.Contains("Segr3ta"));
     }
 
     [Fact]

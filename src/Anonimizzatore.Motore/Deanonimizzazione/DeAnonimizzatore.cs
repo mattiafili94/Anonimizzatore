@@ -82,11 +82,14 @@ public sealed partial class DeAnonimizzatore
     };
 
     private readonly MappaCliente _mappa;
+    private readonly Infrastruttura.AnalizzatoreInfrastruttura _infrastruttura;
 
     public DeAnonimizzatore(MappaCliente mappa)
     {
         ArgumentNullException.ThrowIfNull(mappa);
         _mappa = mappa;
+        // Testo libero: in una risposta dell'IA uno spazio chiude un percorso.
+        _infrastruttura = new Infrastruttura.AnalizzatoreInfrastruttura(mappa, new Infrastruttura.OpzioniInfrastruttura(TestoLibero: true));
     }
 
     /// <summary>De-anonimizza il testo della risposta dell'IA.</summary>
@@ -94,6 +97,12 @@ public sealed partial class DeAnonimizzatore
     {
         ArgumentNullException.ThrowIfNull(testo);
 
+        // 1. Infrastruttura: percorsi, URL, IP, email, stringhe di connessione. Per prima, perché lì i nomi di server e
+        //    database stanno dentro un percorso (\\srv_01\dir_001\db_01.bak) e non vanno messi tra parentesi quadre.
+        var infrastruttura = _infrastruttura.RipristinaNeiContesti(testo);
+        testo = infrastruttura.Testo;
+
+        // 2. Nomi degli oggetti (con le parentesi quadre dove servono).
         var passata = new Passata();
         var sb = new StringBuilder(testo.Length);
         var ultimo = 0;
@@ -120,7 +129,8 @@ public sealed partial class DeAnonimizzatore
         // I commenti per ultimi: il loro testo originale non deve passare dalla ricerca dei nomi (un commento può
         // contenere qualcosa che assomiglia a un nome anonimo).
         var commenti = _mappa.Commenti.Ripristina(sb.ToString());
-        return new RisultatoDeAnonimizzazione(commenti.Testo, passata.Sostituzioni, passata.NonTrovati, commenti);
+        return new RisultatoDeAnonimizzazione(
+            commenti.Testo, passata.Sostituzioni + infrastruttura.Sostituzioni.Count, passata.NonTrovati, commenti);
     }
 
     private string SostituisciInParentesi(string dentro, int offset, Passata passata)

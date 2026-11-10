@@ -10,6 +10,8 @@ internal enum ArgSicurezza
     Principale,
     Database,
     ServerCollegato,
+    /// <summary>Un server o un'istanza scritti come testo (<c>SRVSQL01\ISTANZA</c>): <c>@datasrc</c>, <c>@location</c>.</summary>
+    Host,
     Password,
     Sid,
 }
@@ -41,7 +43,10 @@ internal static class ProcedureSicurezza
         ["sp_droprole"] = [("@rolename", ArgSicurezza.Ruolo)],
         ["sp_change_users_login"] = [("@Action", null), ("@UserNamePattern", ArgSicurezza.Utente),
             ("@LoginName", ArgSicurezza.Login), ("@Password", ArgSicurezza.Password)],
-        ["sp_addlinkedserver"] = [("@server", ArgSicurezza.ServerCollegato)],
+        // @provstr (stringa di connessione) è lasciata all'analizzatore dell'infrastruttura, che la legge come testo.
+        ["sp_addlinkedserver"] = [("@server", ArgSicurezza.ServerCollegato), ("@srvproduct", null), ("@provider", null),
+            ("@datasrc", ArgSicurezza.Host), ("@location", ArgSicurezza.Host), ("@provstr", null), ("@catalog", ArgSicurezza.Database)],
+        ["sp_addserver"] = [("@server", ArgSicurezza.ServerCollegato), ("@local", null), ("@duplicate_ok", null)],
         ["sp_dropserver"] = [("@server", ArgSicurezza.ServerCollegato)],
         ["sp_addlinkedsrvlogin"] = [("@rmtsrvname", ArgSicurezza.ServerCollegato), ("@useself", null),
             ("@locallogin", ArgSicurezza.Login), ("@rmtuser", ArgSicurezza.Login), ("@rmtpassword", ArgSicurezza.Password)],

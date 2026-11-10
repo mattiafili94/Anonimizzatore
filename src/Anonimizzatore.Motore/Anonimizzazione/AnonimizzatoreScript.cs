@@ -1,4 +1,5 @@
 using Anonimizzatore.Motore.Classificazione;
+using Anonimizzatore.Motore.Infrastruttura;
 using Anonimizzatore.Motore.Lettura;
 using Anonimizzatore.Motore.Mappa;
 using Anonimizzatore.Motore.Profili;
@@ -86,12 +87,13 @@ public static class AnonimizzatoreScript
         }).ToList();
 
         var liste = new Liste(profilo, mappa);
+        var infrastruttura = new AnalizzatoreInfrastruttura(mappa);
 
         // Fase A: oggetti, colonne, variabili e alias, nell'ordine in cui compaiono.
         foreach (var e in elaborati)
             foreach (var nome in e.Nomi.Where(n => !RuoliComposti.Contains(n.Ruolo) && liste.DaAnonimizzare(n)))
                 e.Sostituzioni[nome.IndiceToken] =
-                    Riquota(NomeAnonimo(nome, mappa, conoscenza, liste), nome, e.Letto.Token[nome.IndiceToken].Text);
+                    Riquota(NomeAnonimo(nome, mappa, conoscenza, liste, infrastruttura), nome, e.Letto.Token[nome.IndiceToken].Text);
 
         // Fase B: indici e constraint.
         var parti = PartiSostituibili(mappa);
@@ -106,10 +108,12 @@ public static class AnonimizzatoreScript
                     e.Sostituzioni[nome.IndiceToken] = Riquota(nuovo, nome, e.Letto.Token[nome.IndiceToken].Text);
             }
 
-        return new RisultatoAnonimizzazione([.. elaborati.Select(e => Ricomponi(e, mappa))]);
+        // Fase C: percorsi, IP, host, email e URL dentro le stringhe. Dopo A e B, così i nomi di server e database
+        // già in mappa si riconoscono anche dentro un percorso (Vendite.bak → db_01.bak).
+        return new RisultatoAnonimizzazione([.. elaborati.Select(e => Ricomponi(e, mappa, infrastruttura))]);
     }
 
-    private static ScriptAnonimizzato Ricomponi(Elaborato e, MappaCliente mappa)
+    private static ScriptAnonimizzato Ricomponi(Elaborato e, MappaCliente mappa, AnalizzatoreInfrastruttura infrastruttura)
     {
         if (e.Pre is null)
         {
@@ -127,8 +131,38 @@ public static class AnonimizzatoreScript
         foreach (var segreto in e.Classificazione!.Segreti)
             testi[segreto.IndiceToken] = TestoSegnaposto(segreto, e.Letto.Token[segreto.IndiceToken].Text);
 
+        var avvisi = new List<Avviso>(e.Avvisi);
+        var daSaltare = e.Sostituzioni.Keys.Concat(e.Classificazione.Segreti.Select(s => s.IndiceToken)).ToHashSet();
+        AnonimizzaStringhe(e.Letto, testi, daSaltare, infrastruttura, avvisi);
+
         // Ultimo passo: i commenti diventano segnaposto (livello 5). Il testo originale resta nella mappa del cliente.
-        return new ScriptAnonimizzato(mappa.Commenti.Anonimizza(string.Concat(testi)), e.Avvisi);
+        return new ScriptAnonimizzato(mappa.Commenti.Anonimizza(string.Concat(testi)), avvisi);
+    }
+
+    /// <summary>
+    /// Ogni letterale stringa che non è già stato trattato come nome o segreto passa dall'analizzatore
+    /// dell'infrastruttura: percorsi (<c>BACKUP ... TO DISK = '...'</c>), IP, host, email, URL, stringhe di connessione.
+    /// </summary>
+    private static void AnonimizzaStringhe(
+        ScriptLetto letto, string[] testi, HashSet<int> daSaltare, AnalizzatoreInfrastruttura infrastruttura, List<Avviso> avvisi)
+    {
+        for (var i = 0; i < letto.Token.Count; i++)
+        {
+            var token = letto.Token[i];
+            if (token.TokenType is not (TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral)
+                || daSaltare.Contains(i))
+                continue;
+
+            var testoToken = testi[i];
+            var prefisso = testoToken.StartsWith('N') || testoToken.StartsWith('n') ? testoToken[..1] : "";
+            if (testoToken.Length < prefisso.Length + 2 || !testoToken.EndsWith('\'')) continue;
+
+            var contenuto = testoToken[(prefisso.Length + 1)..^1].Replace("''", "'");
+            var esito = infrastruttura.Anonimizza(contenuto);
+            avvisi.AddRange(esito.Avvisi.Select(a => new Avviso(a, token.Line)));
+            if (!esito.Testo.Equals(contenuto, StringComparison.Ordinal))
+                testi[i] = prefisso + "'" + esito.Testo.Replace("'", "''") + "'";
+        }
     }
 
     /// <summary>
@@ -233,8 +267,12 @@ public static class AnonimizzatoreScript
     /// Il nome anonimo. Login e utenti nella forma <c>DOMINIO\utente</c> si spezzano: il dominio prende un
     /// <c>dom_01</c>, l'utente un <c>usr_007</c> (<c>dom_01\usr_007</c>).
     /// </summary>
-    private static string NomeAnonimo(NomeTrovato nome, MappaCliente mappa, Conoscenza conoscenza, Liste liste)
+    private static string NomeAnonimo(
+        NomeTrovato nome, MappaCliente mappa, Conoscenza conoscenza, Liste liste, AnalizzatoreInfrastruttura infrastruttura)
     {
+        // Un server scritto come testo (@datasrc = 'SRVSQL02\ISTANZA1'): host e istanza come in una stringa di connessione.
+        if (nome.Ruolo == Ruolo.Server && nome.DaStringa) return infrastruttura.AnonimizzaServer(nome.Nome);
+
         var barra = nome.Nome.IndexOf('\\');
         if (nome.Ruolo is Ruolo.Login or Ruolo.Utente && barra > 0 && barra < nome.Nome.Length - 1)
         {

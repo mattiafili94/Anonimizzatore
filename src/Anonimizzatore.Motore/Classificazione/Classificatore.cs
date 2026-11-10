@@ -213,6 +213,21 @@ public sealed class Classificatore : TSqlFragmentVisitor
                 PrincipaleInStringa(s);
                 break;
 
+            // --- backup, restore e file di database (livello 3) ---
+            case BackupStatement { DatabaseName: not null } n: NomeDatabase(n.DatabaseName); break;
+            case RestoreStatement { DatabaseName: not null } n: NomeDatabase(n.DatabaseName); break;
+            case DeviceInfo { LogicalDevice: not null } n: NomeFile(n.LogicalDevice); break;
+            case MoveRestoreOption { LogicalFileName: StringLiteral s }: Stringa(s, Ruolo.File, sistema: false); break;
+            case NameFileDeclarationOption { LogicalFileName: not null } n: NomeFile(n.LogicalFileName); break;
+            case AlterDatabaseStatement n:
+                if (!n.UseCurrent && n.DatabaseName is not null) AggiungiDatabase(n.DatabaseName);
+                if (n is AlterDatabaseModifyNameStatement { NewDatabaseName: not null } rinomina) AggiungiDatabase(rinomina.NewDatabaseName);
+                break;
+            case DropDatabaseStatement n:
+                foreach (var database in n.Databases) AggiungiDatabase(database);
+                break;
+            case DbccStatement n: Dbcc(n); break;
+
             // --- segreti: password, hash di password, SID ---
             case PasswordCreateLoginSource n: NascondiSegreto(n.Password, TipoSegreto.Password); break;
             case PasswordAlterPrincipalOption n:
@@ -305,9 +320,57 @@ public sealed class Classificatore : TSqlFragmentVisitor
                 case ArgSicurezza.Principale: PrincipaleInStringa(valore); break;
                 case ArgSicurezza.Database: Stringa(valore, Ruolo.Database, ListeBase.DatabaseDiSistema(valore.Value)); break;
                 case ArgSicurezza.ServerCollegato: Stringa(valore, Ruolo.LinkedServer, false); break;
+                case ArgSicurezza.Host: Stringa(valore, Ruolo.Server, false); break;
                 case ArgSicurezza.Password: NascondiSegreto(valore, TipoSegreto.Password); break;
                 case ArgSicurezza.Sid: NascondiSegreto(valore, TipoSegreto.Sid); break;
             }
+        }
+    }
+
+    // --- backup, restore e file di database ---
+
+    /// <summary>Nome di un database in <c>BACKUP DATABASE x</c> / <c>RESTORE DATABASE x</c>: un identificatore, una stringa o una variabile.</summary>
+    private void NomeDatabase(IdentifierOrValueExpression nome)
+    {
+        if (nome.Identifier is { } id) AggiungiDatabase(id);
+        else if (nome.ValueExpression is StringLiteral s) Stringa(s, Ruolo.Database, ListeBase.DatabaseDiSistema(s.Value));
+    }
+
+    /// <summary>Nome logico di un file o di un dispositivo di backup (<c>NAME = Vendite_Data</c>, <c>TO BackupVendite</c>).</summary>
+    private void NomeFile(IdentifierOrValueExpression nome)
+    {
+        if (nome.Identifier is { } id) Aggiungi(id, Ruolo.File, sistema: false);
+        else if (nome.ValueExpression is StringLiteral s) Stringa(s, Ruolo.File, sistema: false);
+    }
+
+    /// <summary>
+    /// Il primo argomento di <c>DBCC CHECKDB('nome')</c>, <c>SHRINKDATABASE</c>, <c>SHRINKFILE</c>... è un database o un file.
+    /// Scritto senza apici è letto come colonna: la classificazione fatta qui, prima dei figli, ha la precedenza.
+    /// </summary>
+    private void Dbcc(DbccStatement comando)
+    {
+        var ruolo = comando.Command switch
+        {
+            DbccCommand.CheckDB or DbccCommand.CheckAlloc or DbccCommand.CheckCatalog or DbccCommand.CheckFileGroup
+                or DbccCommand.ShrinkDatabase or DbccCommand.UpdateUsage => Ruolo.Database,
+            DbccCommand.ShrinkFile => Ruolo.File,
+            _ => (Ruolo?)null,
+        };
+        if (ruolo is null || comando.Literals.Count == 0) return;
+
+        var sistema = ruolo == Ruolo.Database;
+        switch (comando.Literals[0].Value)
+        {
+            case StringLiteral s:
+                Stringa(s, ruolo.Value, sistema && ListeBase.DatabaseDiSistema(s.Value));
+                break;
+            case IdentifierLiteral { FirstTokenIndex: >= 0 } nudo: // DBCC CHECKDB (Vendite): senza apici
+                _trovati.TryAdd(nudo.FirstTokenIndex, new NomeTrovato(nudo.FirstTokenIndex, ruolo.Value, nudo.Value,
+                    nudo.QuoteType, sistema && ListeBase.DatabaseDiSistema(nudo.Value)));
+                break;
+            case ColumnReferenceExpression { MultiPartIdentifier.Identifiers: [var id] }:
+                Aggiungi(id, ruolo.Value, sistema && ListeBase.DatabaseDiSistema(id.Value));
+                break;
         }
     }
 
