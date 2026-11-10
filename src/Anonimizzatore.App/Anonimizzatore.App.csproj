@@ -13,12 +13,16 @@
     <!-- Pubblicazione: niente simboli di debug e solo le lingue che servono (italiano, inglese): cartella più leggera. -->
     <DebugType>none</DebugType>
     <SatelliteResourceLanguages>it;en</SatelliteResourceLanguages>
+    <!-- L'icona dell'eseguibile (Esplora risorse, barra delle applicazioni). Si rifà con tools\crea-icona.ps1. -->
+    <ApplicationIcon>Icona\anonimizzatore.ico</ApplicationIcon>
     <Product>Anonimizzatore T-SQL</Product>
     <Description>Anonimizza script T-SQL da passare all'IA e rimette i nomi veri nelle risposte. Funziona offline.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.20" />
+    <!-- La stessa icona nella barra del titolo della finestra. -->
+    <Resource Include="Icona\anonimizzatore.ico" />
   </ItemGroup>
 
   <ItemGroup>

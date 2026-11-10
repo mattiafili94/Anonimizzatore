@@ -4,6 +4,7 @@
         xmlns:blazor="clr-namespace:Microsoft.AspNetCore.Components.WebView.Wpf;assembly=Microsoft.AspNetCore.Components.WebView.Wpf"
         xmlns:web="clr-namespace:Microsoft.AspNetCore.Components.Web;assembly=Microsoft.AspNetCore.Components.Web"
         xmlns:layout="clr-namespace:Anonimizzatore.Interfaccia.Layout;assembly=Anonimizzatore.Interfaccia"
+        Icon="Icona/anonimizzatore.ico"
         Title="Anonimizzatore T-SQL" Width="1280" Height="820" MinWidth="520" MinHeight="480"
         WindowStartupLocation="CenterScreen">
     <blazor:BlazorWebView x:Name="Vista" HostPage="wwwroot\index.html">
