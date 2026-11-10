@@ -100,10 +100,10 @@ public static class AnonimizzatoreScript
                 if (nuovo != nome.Nome) e.Sostituzioni[nome.IndiceToken] = Riquota(nuovo, nome.Apici);
             }
 
-        return new RisultatoAnonimizzazione([.. elaborati.Select(Ricomponi)]);
+        return new RisultatoAnonimizzazione([.. elaborati.Select(e => Ricomponi(e, mappa))]);
     }
 
-    private static ScriptAnonimizzato Ricomponi(Elaborato e)
+    private static ScriptAnonimizzato Ricomponi(Elaborato e, MappaCliente mappa)
     {
         if (e.Pre is null)
         {
@@ -116,7 +116,9 @@ public static class AnonimizzatoreScript
 
         var testi = e.Letto.Token.Select(t => t.Text).ToArray();
         foreach (var (indice, testo) in e.Sostituzioni) testi[indice] = testo;
-        return new ScriptAnonimizzato(string.Concat(testi), e.Avvisi);
+
+        // Ultimo passo: i commenti diventano segnaposto (livello 5). Il testo originale resta nella mappa del cliente.
+        return new ScriptAnonimizzato(mappa.Commenti.Anonimizza(string.Concat(testi)), e.Avvisi);
     }
 
     /// <summary>

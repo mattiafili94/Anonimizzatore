@@ -44,6 +44,7 @@ public sealed partial class GestoreCommenti
     private static partial Regex RegexSegnaposto();
 
     private readonly SortedDictionary<int, string> _commenti = [];
+    private readonly Dictionary<string, int> _numeroPerTesto = new(StringComparer.Ordinal);
     private int _ultimoNumero;
 
     /// <summary>I commenti conservati, in ordine di numero.</summary>
@@ -111,8 +112,14 @@ public sealed partial class GestoreCommenti
 
     private void Conserva(StringBuilder risultato, string commento)
     {
-        var numero = ++_ultimoNumero;
-        _commenti[numero] = commento;
+        // Lo stesso testo riceve sempre lo stesso segnaposto: rianonimizzare lo stesso script (o ripetere "-- TODO")
+        // non cambia i numeri a metà di una conversazione con l'IA e non fa crescere la mappa.
+        if (!_numeroPerTesto.TryGetValue(commento, out var numero))
+        {
+            numero = ++_ultimoNumero;
+            _commenti[numero] = commento;
+            _numeroPerTesto[commento] = numero;
+        }
         risultato.Append(Segnaposto(numero));
     }
 
@@ -178,6 +185,7 @@ public sealed partial class GestoreCommenti
         foreach (var c in dati.Commenti)
         {
             gestore._commenti[c.Numero] = c.Testo;
+            gestore._numeroPerTesto.TryAdd(c.Testo, c.Numero);
             gestore._ultimoNumero = Math.Max(gestore._ultimoNumero, c.Numero);
         }
         return gestore;
@@ -194,6 +202,7 @@ public sealed partial class GestoreCommenti
     public void Rigenera()
     {
         _commenti.Clear();
+        _numeroPerTesto.Clear();
         _ultimoNumero = 0;
     }
 }

@@ -1,12 +1,17 @@
 using System.Text.RegularExpressions;
+using Anonimizzatore.Motore.Commenti;
 
 namespace Anonimizzatore.Motore.Mappa;
 
 /// <summary>Una corrispondenza della mappa: nome originale (senza parentesi) ↔ nome anonimo.</summary>
 public sealed record VoceMappa(Ruolo Ruolo, string Originale, string Anonimo, int Numero);
 
-/// <summary>Contenuto salvabile di una mappa (usato da <see cref="Profili.ArchivioProfili"/>).</summary>
-public sealed record DatiMappa(List<VoceMappa> Voci, Dictionary<string, int> Contatori);
+/// <summary>
+/// Contenuto salvabile di una mappa (usato da <see cref="Profili.ArchivioProfili"/>). <c>Commenti</c> manca nei file
+/// salvati prima della tappa 6: vale come "nessun commento".
+/// </summary>
+public sealed record DatiMappa(
+    List<VoceMappa> Voci, Dictionary<string, int> Contatori, DatiCommenti? Commenti = null);
 
 /// <summary>
 /// Mappa di un cliente: nome originale ↔ nome anonimo, case-insensitive.
@@ -25,6 +30,12 @@ public sealed partial class MappaCliente
     private readonly Dictionary<string, int> _contatori = new(NomeSql.Confronto);
     private readonly HashSet<string> _nomiOriginali = new(NomeSql.Confronto);
     private readonly HashSet<string> _nomiRiservati = new(NomeSql.Confronto);
+
+    /// <summary>
+    /// I commenti del cliente: il testo originale di ogni commento sostituito da un segnaposto <c>/* c001 */</c>.
+    /// Vive nella mappa (e quindi nel file cifrato del profilo) perché i commenti possono contenere dati riservati.
+    /// </summary>
+    public GestoreCommenti Commenti { get; private set; } = new();
 
     /// <summary>Tutte le corrispondenze, nell'ordine in cui sono state create.</summary>
     public IReadOnlyCollection<VoceMappa> Voci => _perAnonimo.Values;
@@ -94,13 +105,15 @@ public sealed partial class MappaCliente
         _perNumero.Clear();
         _contatori.Clear();
         _nomiOriginali.Clear();
+        Commenti.Rigenera();
     }
 
-    public DatiMappa Esporta() => new([.. Voci], new Dictionary<string, int>(_contatori));
+    public DatiMappa Esporta() => new([.. Voci], new Dictionary<string, int>(_contatori), Commenti.Esporta());
 
     public static MappaCliente Da(DatiMappa dati)
     {
         var mappa = new MappaCliente();
+        if (dati.Commenti is not null) mappa.Commenti = GestoreCommenti.Da(dati.Commenti);
         foreach (var voce in dati.Voci) mappa.Registra(voce);
         foreach (var (famiglia, n) in dati.Contatori) mappa._contatori[famiglia] = n;
         return mappa;

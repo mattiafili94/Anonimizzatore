@@ -19,7 +19,7 @@ public class NomiOggettiTest
         Assert.Contains("CREATE TABLE [sch_01].[tbl_001]", anon);
         Assert.Contains("CREATE PROCEDURE [sch_01].[usp_001]", anon);
         Assert.Contains("FROM   [sch_01].[tbl_001] AS o", anon);
-        // Colonne, parametri, alias e commenti non sono livello 1: restano com'erano (tappe 4 e 6).
+        // Colonne, parametri e alias restano com'erano (in chiaro di default).
         Assert.Contains("IdOrdine     int", anon);
         Assert.Contains("@IdCliente int", anon);
         Assert.Contains("o.IdOrdine", anon);
@@ -52,12 +52,17 @@ public class NomiOggettiTest
     [Fact]
     public void La_formattazione_non_cambia_solo_i_nomi()
     {
+        // Senza commenti l'impaginazione è identica riga per riga.
         var sql = LeggiEsempio("vendite-ordini.sql");
+        var senzaCommenti = string.Concat(Motore.Lettura.LettoreScript.Leggi(sql).Token
+            .Where(t => t.TokenType is not (Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.SingleLineComment
+                or Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.MultilineComment))
+            .Select(t => t.Text));
 
-        var anon = Anon(sql);
+        var anon = Anon(senzaCommenti);
 
-        Assert.Equal(sql.Count(c => c == '\n'), anon.Count(c => c == '\n'));
-        Assert.Equal(sql.Split('\n').Length, anon.Split('\n').Length);
+        Assert.Equal(senzaCommenti.Split('\n').Length, anon.Split('\n').Length);
+        Assert.Equal(senzaCommenti.Count(c => c == ' '), anon.Count(c => c == ' '));
     }
 
     [Fact]

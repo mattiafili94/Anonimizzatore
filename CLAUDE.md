@@ -43,8 +43,8 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   - `Infrastruttura/AnalizzatoreInfrastruttura` (parte testo della tappa 8): percorsi, IP, host, email, URL, stringhe
     di connessione, con metodo inverso `Ripristina`. Ha aggiunto i ruoli `Cartella`, `File`, `Ip`, `Email` in
     `Ruolo` (famiglie `dir`, `file`, `ip`, `mail`).
-  Da fare quando si agganciano: il `DeAnonimizzatore` dovrà ripristinare anche i segnaposto commento e i valori
-  dell'infrastruttura; i test di andata e ritorno useranno quello vero al posto di `Aiuti.RipristinaPerProva`.
+  Agganciati finora: `DeAnonimizzatore` (dalla tappa 4) e `GestoreCommenti` (tappa 6). Da agganciare: il
+  `DeAnonimizzatore` dovrà ripristinare anche i valori dell'infrastruttura (`AnalizzatoreInfrastruttura`, tappa 8-9).
 - **Tappa 4 fatta** (10/11/2026): colonne, variabili, parametri, alias, indici e constraint, 331 test verdi. Novità:
   - tipi ricavati dallo script (`Conoscenza.DichiaraTipo`): CREATE/ALTER TABLE, parametri, DECLARE (dichiarati) e
     CAST/CONVERT (dedotti, valgono solo se manca il dichiarato) → `col_vc20_001`, `@p_vc20_001`, altrimenti `col_x_`;
@@ -73,9 +73,23 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     si cambia solo con "rigenera nomi" (`MappaCliente.Contiene(ruolo, nome)`);
   - vale per tutti i ruoli, anche con la matrice che anonimizza colonne/indici: `Id`, `Nome` restano in chiaro.
   - Ancora da fare per la blacklist: applicarla alle **stringhe** e ai commenti (tappe 6 e 9).
-- **Prossimo passo**: tappa 6 (agganciare `GestoreCommenti` all'`AnonimizzatoreScript`: segnaposto `/* c001 */`, testi
-  originali nella mappa del cliente, ripristino nel `DeAnonimizzatore`). Poi 7-13 (sicurezza, infrastruttura nelle
-  stringhe e SQL dinamico, SQLCMD/modalità di riserva, legenda, de-anonimizzazione completa, anti-fuga).
+- **Tappa 6 fatta** (10/11/2026): commenti (livello 5), 368 test verdi. `GestoreCommenti` agganciato:
+  - `MappaCliente.Commenti` tiene i testi originali (finiscono nel file cifrato del profilo: `DatiMappa.Commenti`,
+    opzionale, i profili vecchi si caricano lo stesso); `Rigenera()` li azzera;
+  - `AnonimizzatoreScript` sostituisce i commenti come **ultimo passo** di ogni script; la numerazione prosegue tra
+    script diversi e tra una chiamata e l'altra;
+  - **lo stesso testo di commento riceve sempre lo stesso segnaposto** (modifica mia a `GestoreCommenti`): rianonimizzare
+    lo stesso script non cambia i numeri e la mappa non cresce con i duplicati;
+  - `DeAnonimizzatore` ripristina i commenti **dopo** i nomi (un commento che contiene `tbl_001` non viene riscritto) e
+    li riporta in `RisultatoDeAnonimizzazione.Commenti` (`Persi`, `Sconosciuti`, `Spostati`);
+  - un commento su più righe diventa un segnaposto su una riga: i numeri di riga dello script anonimizzato non
+    coincidono più con l'originale (limite noto, da tenere presente se l'IA cita "riga 42");
+  - script con errori di sintassi: nessun numero di commento consumato.
+  - Non ancora fatto: commenti dentro il SQL dinamico (tappa 9).
+- **Prossimo passo**: tappa 7 (sicurezza, livello 2: login, utenti, ruoli, `[DOMINIO\utente]` → `[dom_01\usr_007]`,
+  password e SID come segnaposto **non salvati** nella mappa; `CREATE LOGIN/USER/ROLE`, `GRANT/DENY/REVOKE`,
+  `ALTER ROLE ... ADD MEMBER`, `EXECUTE AS`). Poi 8-13 (infrastruttura nelle stringhe e SQL dinamico, SQLCMD/modalità
+  di riserva, legenda, de-anonimizzazione completa, anti-fuga).
 
 ## Regole fisse (repo pubblica)
 

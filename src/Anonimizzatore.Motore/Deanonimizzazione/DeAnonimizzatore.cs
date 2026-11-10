@@ -13,8 +13,9 @@ public sealed record TokenNonTrovato(string Token, int Posizione);
 /// <param name="Testo">Il testo con i nomi originali rimessi al loro posto.</param>
 /// <param name="Sostituzioni">Quanti nomi anonimi sono stati sostituiti.</param>
 /// <param name="NonTrovati">Token che sembrano anonimi ma senza corrispondenza: restano com'erano nel testo.</param>
+/// <param name="Commenti">Esito del ripristino dei commenti (segnaposto <c>/* c001 */</c>): quali l'IA ha perso, quali sono sconosciuti.</param>
 public sealed record RisultatoDeAnonimizzazione(
-    string Testo, int Sostituzioni, IReadOnlyList<TokenNonTrovato> NonTrovati);
+    string Testo, int Sostituzioni, IReadOnlyList<TokenNonTrovato> NonTrovati, Commenti.RisultatoRipristino? Commenti = null);
 
 /// <summary>
 /// Rimette i nomi originali in una risposta dell'IA (testo libero: prosa + codice).
@@ -115,7 +116,11 @@ public sealed partial class DeAnonimizzatore
         }
 
         sb.Append(testo, ultimo, testo.Length - ultimo);
-        return new RisultatoDeAnonimizzazione(sb.ToString(), passata.Sostituzioni, passata.NonTrovati);
+
+        // I commenti per ultimi: il loro testo originale non deve passare dalla ricerca dei nomi (un commento può
+        // contenere qualcosa che assomiglia a un nome anonimo).
+        var commenti = _mappa.Commenti.Ripristina(sb.ToString());
+        return new RisultatoDeAnonimizzazione(commenti.Testo, passata.Sostituzioni, passata.NonTrovati, commenti);
     }
 
     private string SostituisciInParentesi(string dentro, int offset, Passata passata)
