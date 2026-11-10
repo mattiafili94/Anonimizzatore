@@ -27,6 +27,12 @@ public enum Ruolo
     Variabile,
     Parametro,
     Temporanea,
+
+    // Livello 3 (infrastruttura): percorsi, IP, email
+    Cartella,
+    File,
+    Ip,
+    Email,
 }
 
 /// <summary>
@@ -58,6 +64,10 @@ public static class FamigliaRuolo
         Ruolo.Colonna => "col",
         Ruolo.Variabile or Ruolo.Parametro => "var",
         Ruolo.Temporanea => "tmp",
+        Ruolo.Cartella => "dir",
+        Ruolo.File => "file",
+        Ruolo.Ip => "ip",
+        Ruolo.Email => "mail",
         _ => throw new ArgumentOutOfRangeException(nameof(ruolo), ruolo, null),
     };
 }
