@@ -42,9 +42,15 @@ public static class AnonimizzatoreScript
         Ruolo.Schema, Ruolo.Database, Ruolo.LinkedServer, Ruolo.Server,
     ];
 
+    // Come SQL Server riconosce un SID o una password "svuotati" (restano T-SQL validi).
+    private const string SidSegnaposto = "0x00000000000000000000000000000000";
+    private const string PasswordSegnaposto = "<password>";
+
     private sealed record Elaborato(
-        ScriptLetto Letto, PreAnalisi? Pre, IReadOnlyList<NomeTrovato> Nomi, IReadOnlyList<Avviso> Avvisi)
+        ScriptLetto Letto, PreAnalisi? Pre, RisultatoClassificazione? Classificazione)
     {
+        public IReadOnlyList<NomeTrovato> Nomi => Classificazione?.Nomi ?? [];
+        public IReadOnlyList<Avviso> Avvisi => Classificazione?.Avvisi ?? [];
         public Dictionary<int, string> Sostituzioni { get; } = [];
     }
 
@@ -75,9 +81,8 @@ public static class AnonimizzatoreScript
         // Giro 2: classificazione.
         var elaborati = letti.Select(l =>
         {
-            if (!pre.TryGetValue(l, out var p)) return new Elaborato(l, null, [], []);
-            var (nomi, avvisi) = Classificatore.Classifica(l.Albero, conoscenza, p);
-            return new Elaborato(l, p, nomi, avvisi);
+            if (!pre.TryGetValue(l, out var p)) return new Elaborato(l, null, null);
+            return new Elaborato(l, p, Classificatore.Classifica(l.Albero, conoscenza, p));
         }).ToList();
 
         var liste = new Liste(profilo, mappa);
@@ -86,7 +91,7 @@ public static class AnonimizzatoreScript
         foreach (var e in elaborati)
             foreach (var nome in e.Nomi.Where(n => !RuoliComposti.Contains(n.Ruolo) && liste.DaAnonimizzare(n)))
                 e.Sostituzioni[nome.IndiceToken] =
-                    Riquota(mappa.Ottieni(nome.Ruolo, nome.Nome, TipoDi(nome, conoscenza)), nome.Apici);
+                    Riquota(NomeAnonimo(nome, mappa, conoscenza, liste), nome, e.Letto.Token[nome.IndiceToken].Text);
 
         // Fase B: indici e constraint.
         var parti = PartiSostituibili(mappa);
@@ -97,7 +102,8 @@ public static class AnonimizzatoreScript
                 // pulito; altrimenti solo le parti che sono oggetti anonimizzati.
                 var nuovo = liste.DaAnonimizzare(nome) ? null : SostituisciParti(nome.Nome, parti);
                 nuovo ??= mappa.Ottieni(nome.Ruolo, nome.Nome);
-                if (nuovo != nome.Nome) e.Sostituzioni[nome.IndiceToken] = Riquota(nuovo, nome.Apici);
+                if (nuovo != nome.Nome)
+                    e.Sostituzioni[nome.IndiceToken] = Riquota(nuovo, nome, e.Letto.Token[nome.IndiceToken].Text);
             }
 
         return new RisultatoAnonimizzazione([.. elaborati.Select(e => Ricomponi(e, mappa))]);
@@ -116,6 +122,10 @@ public static class AnonimizzatoreScript
 
         var testi = e.Letto.Token.Select(t => t.Text).ToArray();
         foreach (var (indice, testo) in e.Sostituzioni) testi[indice] = testo;
+
+        // Password e SID: sempre cancellati, qualunque sia il profilo. Non passano dalla mappa e non vengono salvati.
+        foreach (var segreto in e.Classificazione!.Segreti)
+            testi[segreto.IndiceToken] = TestoSegnaposto(segreto, e.Letto.Token[segreto.IndiceToken].Text);
 
         // Ultimo passo: i commenti diventano segnaposto (livello 5). Il testo originale resta nella mappa del cliente.
         return new ScriptAnonimizzato(mappa.Commenti.Anonimizza(string.Concat(testi)), e.Avvisi);
@@ -139,6 +149,11 @@ public static class AnonimizzatoreScript
             if (profilo.TrattamentoDi(nome.Ruolo) != Trattamento.Anonimizza) return false;
             return !_whitelist.Contiene(nome.Nome) || mappa.Contiene(nome.Ruolo, nome.Nome);
         }
+
+        /// <summary>Il dominio di <c>DOMINIO\utente</c>: segue la matrice, ma la blacklist vince e i domini di sistema restano.</summary>
+        public bool DominioDaAnonimizzare(string dominio) =>
+            !ListeBase.DominioDiSistema(dominio)
+            && (_blacklist.Contiene(dominio) || profilo.TrattamentoDi(Ruolo.Dominio) == Trattamento.Anonimizza);
     }
 
     /// <summary>Tipo SQL noto per colonne, variabili e parametri (serve al nome: <c>col_vc50_012</c>).</summary>
@@ -214,11 +229,46 @@ public static class AnonimizzatoreScript
     private static bool FineParola(string nome, int fine) =>
         fine >= nome.Length || !char.IsLetter(nome[fine]) || char.IsUpper(nome[fine]);
 
-    /// <summary>Rimette le parentesi o gli apici come nell'originale.</summary>
-    private static string Riquota(string nome, QuoteType apici) => apici switch
+    /// <summary>
+    /// Il nome anonimo. Login e utenti nella forma <c>DOMINIO\utente</c> si spezzano: il dominio prende un
+    /// <c>dom_01</c>, l'utente un <c>usr_007</c> (<c>dom_01\usr_007</c>).
+    /// </summary>
+    private static string NomeAnonimo(NomeTrovato nome, MappaCliente mappa, Conoscenza conoscenza, Liste liste)
     {
-        QuoteType.SquareBracket => "[" + nome.Replace("]", "]]") + "]",
-        QuoteType.DoubleQuote => "\"" + nome.Replace("\"", "\"\"") + "\"",
-        _ => nome,
-    };
+        var barra = nome.Nome.IndexOf('\\');
+        if (nome.Ruolo is Ruolo.Login or Ruolo.Utente && barra > 0 && barra < nome.Nome.Length - 1)
+        {
+            var dominio = nome.Nome[..barra];
+            if (liste.DominioDaAnonimizzare(dominio)) dominio = mappa.Ottieni(Ruolo.Dominio, dominio);
+            return dominio + "\\" + mappa.Ottieni(nome.Ruolo, nome.Nome[(barra + 1)..]);
+        }
+
+        return mappa.Ottieni(nome.Ruolo, nome.Nome, TipoDi(nome, conoscenza));
+    }
+
+    /// <summary>Rimette le parentesi o gli apici come nell'originale (e, per i nomi dentro una stringa, il prefisso N).</summary>
+    private static string Riquota(string nuovo, NomeTrovato nome, string tokenOriginale)
+    {
+        if (nome.DaStringa)
+        {
+            var prefisso = tokenOriginale.StartsWith('N') || tokenOriginale.StartsWith('n') ? tokenOriginale[..1] : "";
+            return prefisso + "'" + nuovo.Replace("'", "''") + "'";
+        }
+
+        return nome.Apici switch
+        {
+            QuoteType.SquareBracket => "[" + nuovo.Replace("]", "]]") + "]",
+            QuoteType.DoubleQuote => "\"" + nuovo.Replace("\"", "\"\"") + "\"",
+            _ => nuovo,
+        };
+    }
+
+    /// <summary>Il segnaposto fisso di una password o di un SID, nello stesso formato del valore originale.</summary>
+    private static string TestoSegnaposto(Segreto segreto, string tokenOriginale)
+    {
+        if (segreto.Tipo == TipoSegreto.Sid) return SidSegnaposto;
+        if (tokenOriginale.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) return "0x00"; // hash di password
+        var prefisso = tokenOriginale.StartsWith('N') || tokenOriginale.StartsWith('n') ? tokenOriginale[..1] : "";
+        return prefisso + "'" + PasswordSegnaposto + "'";
+    }
 }

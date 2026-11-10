@@ -16,9 +16,31 @@ public static class LettoreScript
         // initialQuotedIdentifiers: true = comportamento predefinito di SQL Server ("..." sono nomi, non stringhe).
         var parser = new TSql170Parser(initialQuotedIdentifiers: true);
 
-        using var lettore = new StringReader(testo);
-        var albero = parser.Parse(lettore, out IList<ParseError> errori);
+        try
+        {
+            using var lettore = new StringReader(testo);
+            var albero = parser.Parse(lettore, out IList<ParseError> errori);
+            return new ScriptLetto(testo, albero, albero.ScriptTokenStream, errori);
+        }
+        catch (Exception eccezione) when (eccezione is not OutOfMemoryException)
+        {
+            // Il parser di Microsoft può andare in errore interno su script insoliti: non deve far cadere il motore.
+            // Si restituisce uno script "non valido" con un errore, come per un errore di sintassi qualsiasi.
+            return new ScriptLetto(testo, new TSqlScript(), TokenOVuoti(testo),
+                [new ParseError(0, 0, 1, 1, $"Errore interno del parser ({eccezione.GetType().Name}): lo script non è stato letto.")]);
+        }
+    }
 
-        return new ScriptLetto(testo, albero, albero.ScriptTokenStream, errori);
+    private static IList<TSqlParserToken> TokenOVuoti(string testo)
+    {
+        try
+        {
+            using var lettore = new StringReader(testo);
+            return new TSql170Parser(initialQuotedIdentifiers: true).GetTokenStream(lettore, out _);
+        }
+        catch (Exception)
+        {
+            return [];
+        }
     }
 }

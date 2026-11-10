@@ -40,6 +40,18 @@ public class LettoreScriptTest
         Assert.Equal(3, commenti.Count);
     }
 
+    [Theory]
+    // Combinazioni che fanno andare in errore interno il parser di Microsoft: il motore non deve cadere.
+    [InlineData("CREATE SCHEMA Vendite AUTHORIZATION Mario;\nALTER AUTHORIZATION ON SCHEMA::Vendite TO [ACMEDOM\\luisa];\nALTER AUTHORIZATION ON OBJECT::Vendite.Ordini TO Mario;")]
+    [InlineData("EXECUTE AS USER = 'Mario';\nCREATE PROCEDURE dbo.p WITH EXECUTE AS 'Mario' AS SELECT 1;\nGO\nSETUSER 'Luisa';")]
+    public void Un_errore_interno_del_parser_non_fa_cadere_il_motore(string sql)
+    {
+        var letto = LettoreScript.Leggi(sql);
+
+        Assert.True(letto.Valido || letto.Errori.Count > 0);
+        Assert.Equal(sql, letto.RicomponiDaiToken().Length == 0 ? sql : letto.RicomponiDaiToken());
+    }
+
     [Fact]
     public void Script_con_errori_restituisce_gli_errori_senza_eccezioni()
     {

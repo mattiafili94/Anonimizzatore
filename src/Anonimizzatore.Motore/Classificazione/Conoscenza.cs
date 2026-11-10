@@ -24,6 +24,8 @@ public sealed class Conoscenza
         var c = new Conoscenza();
         foreach (var voce in mappa.Voci.Where(v => RuoliDaMappa.Contains(v.Ruolo)))
             c._ruoli.TryAdd(voce.Originale, voce.Ruolo);
+        foreach (var voce in mappa.Voci.Where(v => v.Ruolo is Ruolo.RuoloDb or Ruolo.Utente or Ruolo.Login))
+            c._principali.TryAdd(NomeSql.Normalizza(voce.Originale), voce.Ruolo);
         return c;
     }
 
@@ -37,6 +39,25 @@ public sealed class Conoscenza
     /// <summary>Ruolo per un nome usato dove ci si aspetta una tabella: vista se è nota come vista, altrimenti tabella.</summary>
     public Ruolo RuoloComeTabella(string nome) =>
         _ruoli.TryGetValue(NomeSql.Normalizza(nome), out var r) && r == Ruolo.Vista ? Ruolo.Vista : Ruolo.Tabella;
+
+    /// <summary>Ruolo noto di un oggetto (tabella, vista, procedura, funzione, trigger), se è già stato visto.</summary>
+    public Ruolo? RuoloNoto(string nome) =>
+        _ruoli.TryGetValue(NomeSql.Normalizza(nome), out var r) ? r : null;
+
+    // --- login, utenti e ruoli ---
+
+    private readonly Dictionary<string, Ruolo> _principali = new(NomeSql.Confronto);
+
+    /// <summary>
+    /// Registra un login, un utente o un ruolo dichiarato (<c>CREATE ROLE</c>...). Serve per i nomi che compaiono dove
+    /// può esserci sia un utente sia un ruolo (<c>GRANT ... TO nome</c>): se il nome è un ruolo noto prende il
+    /// prefisso <c>rol_</c>, altrimenti <c>usr_</c>.
+    /// </summary>
+    public void DichiaraPrincipale(string nome, Ruolo ruolo) => _principali[NomeSql.Normalizza(nome)] = ruolo;
+
+    /// <summary>Ruolo di un nome che può essere utente o ruolo: <see cref="Ruolo.RuoloDb"/> se è un ruolo noto, altrimenti <see cref="Ruolo.Utente"/>.</summary>
+    public Ruolo RuoloPrincipale(string nome) =>
+        _principali.TryGetValue(NomeSql.Normalizza(nome), out var r) && r == Ruolo.RuoloDb ? Ruolo.RuoloDb : Ruolo.Utente;
 
     // --- constraint e indici ---
 

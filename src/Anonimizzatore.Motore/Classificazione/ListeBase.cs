@@ -59,7 +59,7 @@ public static class ListeBase
         "sp_readerrorlog", "sp_cycle_errorlog", "sp_enumerrorlogs", "sp_send_dbmail", "sp_addextendedproperty",
         "sp_updateextendedproperty", "sp_dropextendedproperty", "sp_set_session_context", "sp_getapplock",
         "sp_releaseapplock", "sp_addtype", "sp_droptype", "sp_validatelogins", "sp_addumpdevice",
-        "sp_dropdevice", "sp_testlinkedserver", "sp_dropremotelogin", "sp_addremotelogin",
+        "sp_dropdevice", "sp_addrole", "sp_droprole", "sp_testlinkedserver", "sp_dropremotelogin", "sp_addremotelogin",
         "sp_add_jobstep", "sp_update_jobstep", "sp_delete_jobstep", "sp_add_jobserver", "sp_delete_jobserver",
         "sp_add_jobschedule", "sp_delete_jobschedule", "sp_help_jobschedule",
         "sp_msforeachtable", "sp_msforeachdb", "sp_oacreate", "sp_oamethod", "sp_oadestroy", "sp_oagetproperty",
@@ -118,6 +118,45 @@ public static class ListeBase
         "master", "info", "main", "base", "new", "old", "nuovo", "vecchio", "ultimo", "last", "first", "primo",
         "min", "max", "sum", "avg", "tot", "row", "rows", "col", "cols", "table", "view", "proc", "func", "all", "tutti",
     };
+
+    // Utenti, login e ruoli che esistono in ogni installazione: l'IA li conosce e non rivelano nulla.
+    private static readonly HashSet<string> PrincipaliSistema = new(NomeSql.Confronto)
+    {
+        "sa", "public", "dbo", "guest", "sys", "INFORMATION_SCHEMA",
+        // ruoli fissi di server
+        "sysadmin", "securityadmin", "serveradmin", "setupadmin", "processadmin", "diskadmin", "dbcreator", "bulkadmin",
+        // ruoli fissi di database
+        "db_owner", "db_accessadmin", "db_securityadmin", "db_ddladmin", "db_backupoperator", "db_datareader",
+        "db_datawriter", "db_denydatareader", "db_denydatawriter",
+        // msdb, SSIS, Database Mail, SQL Agent
+        "db_ssisadmin", "db_ssisltduser", "db_ssisoperator", "dc_admin", "dc_operator", "dc_proxy",
+        "SQLAgentUserRole", "SQLAgentReaderRole", "SQLAgentOperatorRole", "DatabaseMailUserRole",
+        "TargetServersRole", "ServerGroupAdministratorRole", "ServerGroupReaderRole", "PolicyAdministratorRole",
+        "UtilityCMRReader", "UtilityIMRWriter", "UtilityIMRReader", "MS_DataCollectorInternalUser",
+    };
+
+    // Domini degli account Windows di sistema: NT AUTHORITY\SYSTEM, NT SERVICE\MSSQLSERVER, BUILTIN\Administrators...
+    private static readonly HashSet<string> DominiSistema = new(NomeSql.Confronto)
+    {
+        "NT AUTHORITY", "NT SERVICE", "BUILTIN", "NT VIRTUAL MACHINE", "Window Manager", "Font Driver Host",
+    };
+
+    /// <summary>Vero se il dominio è quello degli account Windows di sistema (<c>NT AUTHORITY</c>, <c>BUILTIN</c>...).</summary>
+    public static bool DominioDiSistema(string dominio) => DominiSistema.Contains(NomeSql.Normalizza(dominio));
+
+    /// <summary>
+    /// Vero per login, utenti e ruoli predefiniti (<c>sa</c>, <c>public</c>, <c>db_owner</c>, <c>##MS_...##</c>) e per gli
+    /// account Windows di sistema (<c>NT AUTHORITY\SYSTEM</c>): restano sempre in chiaro.
+    /// </summary>
+    public static bool PrincipaleDiSistema(string nome)
+    {
+        nome = NomeSql.Normalizza(nome);
+        if (PrincipaliSistema.Contains(nome)) return true;
+        if (nome.Length > 4 && nome.StartsWith("##", StringComparison.Ordinal) && nome.EndsWith("##", StringComparison.Ordinal))
+            return true; // ##MS_PolicyEventProcessingLogin## e simili
+        var barra = nome.IndexOf('\\');
+        return barra > 0 && DominioDiSistema(nome[..barra]);
+    }
 
     /// <summary>Schema che restano in chiaro: <c>dbo</c>, <c>sys</c>, <c>INFORMATION_SCHEMA</c>, <c>guest</c>.</summary>
     public static bool SchemaPredefinito(string schema) => SchemiPredefiniti.Contains(NomeSql.Normalizza(schema));

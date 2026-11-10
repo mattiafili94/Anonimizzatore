@@ -9,10 +9,30 @@ namespace Anonimizzatore.Motore.Classificazione;
 /// <param name="Nome">Il nome senza parentesi (le variabili con la @).</param>
 /// <param name="Apici">Come era scritto: nudo, tra [parentesi] o tra "doppi apici".</param>
 /// <param name="DiSistema">Vero se è un oggetto di sistema: non va mai anonimizzato.</param>
-public sealed record NomeTrovato(int IndiceToken, Ruolo Ruolo, string Nome, QuoteType Apici, bool DiSistema);
+/// <param name="DaStringa">Vero se il nome sta dentro un letterale stringa (<c>EXECUTE AS USER = 'nome'</c>): il token da
+/// sostituire è l'intera stringa e va riscritta con i suoi apici.</param>
+public sealed record NomeTrovato(
+    int IndiceToken, Ruolo Ruolo, string Nome, QuoteType Apici, bool DiSistema, bool DaStringa = false);
 
 /// <summary>Un'osservazione per l'utente (non blocca il lavoro).</summary>
 public sealed record Avviso(string Messaggio, int Riga = 0);
+
+/// <summary>Che cosa nasconde un <see cref="Segreto"/>.</summary>
+public enum TipoSegreto
+{
+    Password,
+    Sid,
+}
+
+/// <summary>
+/// Un valore che non deve mai arrivare all'IA (password, hash di password, SID) e che non viene salvato da nessuna
+/// parte: il token viene sostituito da un segnaposto fisso. Non è un nome, quindi non entra nella mappa.
+/// </summary>
+public sealed record Segreto(int IndiceToken, TipoSegreto Tipo);
+
+/// <summary>Tutto ciò che il classificatore trova in uno script.</summary>
+public sealed record RisultatoClassificazione(
+    IReadOnlyList<NomeTrovato> Nomi, IReadOnlyList<Avviso> Avvisi, IReadOnlyList<Segreto> Segreti);
 
 /// <summary>
 /// Passo 2 del motore: percorre l'albero sintattico e dà un <see cref="Ruolo"/> a ogni nome: oggetti (server,
@@ -30,6 +50,8 @@ public sealed class Classificatore : TSqlFragmentVisitor
     private readonly HashSet<SchemaObjectName> _ignorati = [];
     private readonly HashSet<VariableReference> _variabiliDiSistema = [];
     private readonly List<Avviso> _avvisi = [];
+    private readonly Dictionary<int, Segreto> _segreti = [];
+    private Ruolo _ruoloNomeOpzione = Ruolo.Utente; // login o utente di cui si stanno leggendo le opzioni (WITH NAME = ...)
 
     private Classificatore(Conoscenza conoscenza, PreAnalisi pre)
     {
@@ -37,13 +59,13 @@ public sealed class Classificatore : TSqlFragmentVisitor
         _pre = pre;
     }
 
-    /// <summary>Classifica i nomi di uno script, in ordine di posizione nel testo.</summary>
-    public static (IReadOnlyList<NomeTrovato> Nomi, IReadOnlyList<Avviso> Avvisi) Classifica(
-        TSqlFragment albero, Conoscenza conoscenza, PreAnalisi pre)
+    /// <summary>Classifica i nomi e i segreti di uno script, in ordine di posizione nel testo.</summary>
+    public static RisultatoClassificazione Classifica(TSqlFragment albero, Conoscenza conoscenza, PreAnalisi pre)
     {
         var c = new Classificatore(conoscenza, pre);
         albero.Accept(c);
-        return ([.. c._trovati.Values.OrderBy(n => n.IndiceToken)], c._avvisi);
+        return new RisultatoClassificazione(
+            [.. c._trovati.Values.OrderBy(n => n.IndiceToken)], c._avvisi, [.. c._segreti.Values.OrderBy(s => s.IndiceToken)]);
     }
 
     /// <summary>Le variabili si chiamano sempre con la @ davanti, comunque le restituisca ScriptDom.</summary>
@@ -79,7 +101,10 @@ public sealed class Classificatore : TSqlFragmentVisitor
             case ProcedureStatementBody n: Preved(n.ProcedureReference?.Name, Ruolo.Procedura); break;
             case FunctionStatementBody n: Preved(n.Name, Ruolo.Funzione); break;
             case TriggerStatementBody n: Preved(n.Name, Ruolo.Trigger); break;
-            case CreateSchemaStatement n: Aggiungi(n.Name, Ruolo.Schema, ListeBase.SchemaPredefinito(n.Name.Value)); break;
+            case CreateSchemaStatement n:
+                Aggiungi(n.Name, Ruolo.Schema, ListeBase.SchemaPredefinito(n.Name.Value));
+                PrincipaleAmbiguo(n.Owner);
+                break;
             case CreateDatabaseStatement n: AggiungiDatabase(n.DatabaseName); break;
             case UseStatement n: AggiungiDatabase(n.DatabaseName); break;
             case DropObjectsStatement n: PrevediDrop(n); break;
@@ -153,6 +178,64 @@ public sealed class Classificatore : TSqlFragmentVisitor
                     nomeVariabile, QuoteType.NotQuoted, DiSistema: false));
                 break;
 
+            // --- sicurezza: login, utenti, ruoli (livello 2) ---
+            case CreateLoginStatement n: Principale(n.Name, Ruolo.Login); _ruoloNomeOpzione = Ruolo.Login; break;
+            case AlterLoginStatement n: Principale(n.Name, Ruolo.Login); _ruoloNomeOpzione = Ruolo.Login; break;
+            case UserStatement n: Principale(n.Name, Ruolo.Utente); _ruoloNomeOpzione = Ruolo.Utente; break;
+            case UserLoginOption { UserLoginOptionType: UserLoginOptionType.Login, Identifier: not null } n:
+                Principale(n.Identifier, Ruolo.Login);
+                break;
+            case CreateRoleStatement n: Principale(n.Name, Ruolo.RuoloDb); PrincipaleAmbiguo(n.Owner); break;
+            case RoleStatement n: Principale(n.Name, Ruolo.RuoloDb); break;
+            case ApplicationRoleStatement n: Principale(n.Name, Ruolo.RuoloDb); break;
+            case ApplicationRoleOption { OptionKind: ApplicationRoleOptionKind.DefaultSchema, Value.Identifier: { } schema }:
+                Aggiungi(schema, Ruolo.Schema, ListeBase.SchemaPredefinito(schema.Value));
+                break;
+            case ApplicationRoleOption { OptionKind: ApplicationRoleOptionKind.Password, Value.ValueExpression: Literal password }:
+                NascondiSegreto(password, TipoSegreto.Password);
+                break;
+            case AddMemberAlterRoleAction n: PrincipaleAmbiguo(n.Member); break;
+            case DropMemberAlterRoleAction n: PrincipaleAmbiguo(n.Member); break;
+            case RenameAlterRoleAction n: Principale(n.NewName, Ruolo.RuoloDb); break;
+            case DropUnownedObjectStatement n: PrevediDropPrincipale(n); break;
+            case SecurityStatement n: Permessi(n); break;
+            case AlterAuthorizationStatement n:
+                Bersaglio(n.SecurityTargetObject);
+                PrincipaleAmbiguo(n.PrincipalName);
+                break;
+            case ExecuteAsStatement { ExecuteContext: { Kind: ExecuteAsOption.Login or ExecuteAsOption.User, Principal: StringLiteral s } c }:
+                Stringa(s, c.Kind == ExecuteAsOption.Login ? Ruolo.Login : Ruolo.Utente, ListeBase.PrincipaleDiSistema(s.Value));
+                break;
+            case ExecuteAsClause { Literal: StringLiteral s }:
+                PrincipaleInStringa(s);
+                break;
+            case SetUserStatement { UserName: StringLiteral s }:
+                PrincipaleInStringa(s);
+                break;
+
+            // --- segreti: password, hash di password, SID ---
+            case PasswordCreateLoginSource n: NascondiSegreto(n.Password, TipoSegreto.Password); break;
+            case PasswordAlterPrincipalOption n:
+                NascondiSegreto(n.Password, TipoSegreto.Password);
+                NascondiSegreto(n.OldPassword, TipoSegreto.Password);
+                break;
+            case LiteralPrincipalOption { OptionKind: PrincipalOptionKind.Sid } n: NascondiSegreto(n.Value, TipoSegreto.Sid); break;
+            case LiteralPrincipalOption { OptionKind: PrincipalOptionKind.Password } n: NascondiSegreto(n.Value, TipoSegreto.Password); break;
+            case IdentifierPrincipalOption n: OpzioneConIdentificatore(n); break;
+            case MasterKeyStatement n: NascondiSegreto(n.Password, TipoSegreto.Password); break;
+            case CertificateStatementBase n:
+                NascondiSegreto(n.EncryptionPassword, TipoSegreto.Password);
+                NascondiSegreto(n.DecryptionPassword, TipoSegreto.Password);
+                break;
+            case CryptoMechanism { CryptoMechanismType: CryptoMechanismType.Password } n:
+                NascondiSegreto(n.PasswordOrSignature, TipoSegreto.Password);
+                break;
+            case CredentialStatement n:
+                NascondiSegreto(n.Secret, TipoSegreto.Password);
+                if (n.Identity is StringLiteral { Value: not "SHARED ACCESS SIGNATURE" and not "Managed Identity" } identita)
+                    PrincipaleInStringa(identita);
+                break;
+
             // --- tipi di dato: non sono oggetti del cliente ---
             case UserDataTypeReference n:
                 _ignorati.Add(n.Name);
@@ -192,11 +275,133 @@ public sealed class Classificatore : TSqlFragmentVisitor
         var nome = chiamata.ProcedureReference?.ProcedureReference?.Name;
         Preved(nome, Ruolo.Procedura);
 
+        if (nome?.BaseIdentifier is not { } id
+            || !ListeBase.OggettoDiSistema(Ruolo.Procedura, id.Value, nome.SchemaIdentifier?.Value))
+            return;
+
         // I parametri con nome di una procedura di sistema (@job_name = ...) sono di SQL Server, non del cliente.
-        if (nome?.BaseIdentifier is { } id
-            && ListeBase.OggettoDiSistema(Ruolo.Procedura, id.Value, nome.SchemaIdentifier?.Value))
-            foreach (var p in chiamata.Parameters.Where(p => p.Variable is not null))
-                _variabiliDiSistema.Add(p.Variable);
+        foreach (var p in chiamata.Parameters.Where(p => p.Variable is not null))
+            _variabiliDiSistema.Add(p.Variable);
+
+        // Le procedure di sistema per login, utenti e ruoli ricevono nomi e password come stringhe.
+        if (ProcedureSicurezza.Firma(id.Value) is { } firma) ArgomentiSicurezza(chiamata, firma);
+    }
+
+    private void ArgomentiSicurezza(ExecutableProcedureReference chiamata, IReadOnlyList<(string Nome, ArgSicurezza? Tipo)> firma)
+    {
+        for (var i = 0; i < chiamata.Parameters.Count; i++)
+        {
+            var parametro = chiamata.Parameters[i];
+            var tipo = parametro.Variable is { } conNome
+                ? firma.FirstOrDefault(f => f.Nome.Equals(conNome.Name, StringComparison.OrdinalIgnoreCase)).Tipo
+                : i < firma.Count ? firma[i].Tipo : null;
+            if (tipo is null || parametro.ParameterValue is not StringLiteral valore) continue;
+
+            switch (tipo.Value)
+            {
+                case ArgSicurezza.Login: Stringa(valore, Ruolo.Login, ListeBase.PrincipaleDiSistema(valore.Value)); break;
+                case ArgSicurezza.Utente: Stringa(valore, Ruolo.Utente, ListeBase.PrincipaleDiSistema(valore.Value)); break;
+                case ArgSicurezza.Ruolo: Stringa(valore, Ruolo.RuoloDb, ListeBase.PrincipaleDiSistema(valore.Value)); break;
+                case ArgSicurezza.Principale: PrincipaleInStringa(valore); break;
+                case ArgSicurezza.Database: Stringa(valore, Ruolo.Database, ListeBase.DatabaseDiSistema(valore.Value)); break;
+                case ArgSicurezza.ServerCollegato: Stringa(valore, Ruolo.LinkedServer, false); break;
+                case ArgSicurezza.Password: NascondiSegreto(valore, TipoSegreto.Password); break;
+                case ArgSicurezza.Sid: NascondiSegreto(valore, TipoSegreto.Sid); break;
+            }
+        }
+    }
+
+    // --- sicurezza ---
+
+    private void Principale(Identifier? id, Ruolo ruolo)
+    {
+        if (id is not null) Aggiungi(id, ruolo, ListeBase.PrincipaleDiSistema(id.Value));
+    }
+
+    /// <summary>Un nome che può essere un utente o un ruolo (<c>GRANT ... TO nome</c>): ruolo se è noto come tale.</summary>
+    private void PrincipaleAmbiguo(Identifier? id)
+    {
+        if (id is not null) Principale(id, _conoscenza.RuoloPrincipale(id.Value));
+    }
+
+    private void PrincipaleInStringa(StringLiteral s) =>
+        Stringa(s, _conoscenza.RuoloPrincipale(s.Value), ListeBase.PrincipaleDiSistema(s.Value));
+
+    private void Stringa(Literal? letterale, Ruolo ruolo, bool sistema)
+    {
+        if (letterale is not StringLiteral { FirstTokenIndex: >= 0 } s || s.Value.Length == 0) return;
+        _trovati.TryAdd(s.FirstTokenIndex,
+            new NomeTrovato(s.FirstTokenIndex, ruolo, s.Value, QuoteType.NotQuoted, sistema, DaStringa: true));
+    }
+
+    private void NascondiSegreto(Literal? letterale, TipoSegreto tipo)
+    {
+        if (letterale is { FirstTokenIndex: >= 0 })
+            _segreti.TryAdd(letterale.FirstTokenIndex, new Segreto(letterale.FirstTokenIndex, tipo));
+    }
+
+    private void PrevediDropPrincipale(DropUnownedObjectStatement drop)
+    {
+        var ruolo = drop switch
+        {
+            DropLoginStatement => Ruolo.Login,
+            DropUserStatement => Ruolo.Utente,
+            DropRoleStatement or DropServerRoleStatement => Ruolo.RuoloDb,
+            _ => (Ruolo?)null,
+        };
+        if (ruolo is not null) Principale(drop.Name, ruolo.Value);
+    }
+
+    private void OpzioneConIdentificatore(IdentifierPrincipalOption opzione)
+    {
+        if (opzione.Identifier is not { } id) return;
+        switch (opzione.OptionKind)
+        {
+            case PrincipalOptionKind.DefaultDatabase: AggiungiDatabase(id); break;
+            case PrincipalOptionKind.DefaultSchema: Aggiungi(id, Ruolo.Schema, ListeBase.SchemaPredefinito(id.Value)); break;
+            case PrincipalOptionKind.Login: Principale(id, Ruolo.Login); break;
+            case PrincipalOptionKind.Name: Principale(id, _ruoloNomeOpzione); break;
+        }
+    }
+
+    /// <summary>GRANT / DENY / REVOKE: a chi (utenti o ruoli), su che cosa (oggetto, schema, database...) e su quali colonne.</summary>
+    private void Permessi(SecurityStatement istruzione)
+    {
+        foreach (var principale in istruzione.Principals) PrincipaleAmbiguo(principale.Identifier);
+        PrincipaleAmbiguo(istruzione.AsClause);
+        foreach (var permesso in istruzione.Permissions) Colonne(permesso.Columns);
+
+        // EXECUTE si dà solo su procedure e funzioni: se l'oggetto non è mai stato visto è una procedura, non una tabella.
+        var eseguibile = istruzione.Permissions.Any(p =>
+            p.Identifiers.Count > 0 && p.Identifiers[0].Value.Equals("EXECUTE", StringComparison.OrdinalIgnoreCase));
+        Bersaglio(istruzione.SecurityTargetObject, eseguibile ? Ruolo.Procedura : Ruolo.Tabella);
+    }
+
+    private void Bersaglio(SecurityTargetObject? bersaglio, Ruolo ruoloSeIgnoto = Ruolo.Tabella)
+    {
+        if (bersaglio is null) return;
+
+        var nomi = bersaglio.ObjectName?.MultiPartIdentifier?.Identifiers;
+        if (nomi is { Count: > 0 })
+        {
+            var ultimo = nomi[^1];
+            switch (bersaglio.ObjectKind)
+            {
+                case SecurityObjectKind.Object or SecurityObjectKind.NotSpecified:
+                    AggiungiPrefissi(nomi,
+                        [_conoscenza.RuoloNoto(ultimo.Value) ?? ruoloSeIgnoto, Ruolo.Schema, Ruolo.Database, Ruolo.LinkedServer],
+                        nomi.Count >= 2 ? nomi[^2].Value : null);
+                    break;
+                case SecurityObjectKind.Schema: Aggiungi(ultimo, Ruolo.Schema, ListeBase.SchemaPredefinito(ultimo.Value)); break;
+                case SecurityObjectKind.Database: AggiungiDatabase(ultimo); break;
+                case SecurityObjectKind.Login: Principale(ultimo, Ruolo.Login); break;
+                case SecurityObjectKind.User: Principale(ultimo, Ruolo.Utente); break;
+                case SecurityObjectKind.Role or SecurityObjectKind.ServerRole or SecurityObjectKind.ApplicationRole:
+                    Principale(ultimo, Ruolo.RuoloDb);
+                    break;
+            }
+        }
+        Colonne(bersaglio.Columns);
     }
 
     private void ProcessaNome(SchemaObjectName nome)

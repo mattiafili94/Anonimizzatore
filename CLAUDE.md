@@ -86,10 +86,35 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     coincidono più con l'originale (limite noto, da tenere presente se l'IA cita "riga 42");
   - script con errori di sintassi: nessun numero di commento consumato.
   - Non ancora fatto: commenti dentro il SQL dinamico (tappa 9).
-- **Prossimo passo**: tappa 7 (sicurezza, livello 2: login, utenti, ruoli, `[DOMINIO\utente]` → `[dom_01\usr_007]`,
-  password e SID come segnaposto **non salvati** nella mappa; `CREATE LOGIN/USER/ROLE`, `GRANT/DENY/REVOKE`,
-  `ALTER ROLE ... ADD MEMBER`, `EXECUTE AS`). Poi 8-13 (infrastruttura nelle stringhe e SQL dinamico, SQLCMD/modalità
-  di riserva, legenda, de-anonimizzazione completa, anti-fuga).
+- **Tappa 7 fatta** (10/11/2026): sicurezza (livello 2), 402 test verdi. Novità:
+  - login, utenti, ruoli (`CREATE/ALTER/DROP LOGIN|USER|ROLE`, ruoli di server e applicativi, `ALTER ROLE ... ADD
+    MEMBER`, `WITH NAME/DEFAULT_SCHEMA/DEFAULT_DATABASE`), `GRANT/DENY/REVOKE` (principali, `AS`, oggetto, schema,
+    database, colonne), `ALTER AUTHORIZATION`, `CREATE SCHEMA ... AUTHORIZATION`;
+  - `DOMINIO\utente` si spezza: `[ACMEDOM\mario]` → `[dom_01\usr_001]` (il dominio segue la matrice `Dominio`, la blacklist
+    vince; l'utente è `usr_` come i login/utenti con lo stesso nome). `utente@dominio.com` → un solo `usr_`;
+  - restano in chiaro login/utenti/ruoli di sistema (`sa`, `public`, `dbo`, `guest`, `db_*`, ruoli fissi di server,
+    `##MS_...##`) e gli account `NT AUTHORITY\`, `NT SERVICE\`, `BUILTIN\` (`ListeBase.PrincipaleDiSistema`);
+  - nome che può essere utente o ruolo (`GRANT ... TO nome`): è `rol_` se è un ruolo dichiarato negli script o già nella
+    mappa (`Conoscenza.RuoloPrincipale`), altrimenti `usr_`. Un `GRANT` su un nome mai visto che dà `EXECUTE` è una
+    procedura (`usp_`), non una tabella;
+  - **password, hash di password e SID vengono sempre cancellati** e non passano mai dalla mappa (nemmeno se il profilo
+    lascia tutto in chiaro): `'<password>'` (o `N'<password>'`), `0x00` per un hash, `0x0000…` (16 byte) per un SID.
+    Coperti: `CREATE/ALTER LOGIN`, `CREATE USER ... WITH PASSWORD`, ruoli applicativi, chiave master, certificati, chiavi
+    simmetriche, `CREATE CREDENTIAL ... SECRET`, le `sp_` di sicurezza (`sp_addlogin`, `sp_password`,
+    `sp_change_users_login`, `sp_addlinkedsrvlogin`...). I segreti **non tornano** nel ripristino: l'IA vede il segnaposto;
+  - nomi dentro stringhe: `EXECUTE AS USER|LOGIN = '...'`, `WITH EXECUTE AS '...'`, `SETUSER`, `IDENTITY` delle
+    credenziali e gli argomenti delle `sp_` di sicurezza (`sp_addrolemember`, `sp_adduser`, ...: tabella in
+    `ProcedureSicurezza`), anche con parametri con nome. Il prefisso `N` e gli apici raddoppiati si conservano
+    (`NomeTrovato.DaStringa`);
+  - **`LettoreScript` non solleva più eccezioni**: il parser di Microsoft va in errore interno (NullReference) su certe
+    combinazioni (per esempio `CREATE SCHEMA ... AUTHORIZATION` seguito da altri statement senza `GO`); ora lo script
+    risulta "con errori" e non viene restituito.
+  - Non ancora coperti: nomi di certificati/chiavi/credenziali, proprietario di certificati, job di SQL Agent
+    (`sp_add_job @owner_login_name`), `datasrc`/`provstr` di `sp_addlinkedserver` (tappa 9).
+- **Prossimo passo**: tappa 8 (infrastruttura, livello 3: agganciare `AnalizzatoreInfrastruttura` ai letterali stringa
+  dello script: percorsi di backup/restore, `datasrc` dei server collegati, host, IP, email, URL) e tappa 9 (SQL dinamico
+  ricorsivo, `sp_executesql`, `@command` di `sp_add_jobstep`). Poi 10-13 (SQLCMD/modalità di riserva, legenda,
+  de-anonimizzazione completa, anti-fuga).
 
 ## Regole fisse (repo pubblica)
 

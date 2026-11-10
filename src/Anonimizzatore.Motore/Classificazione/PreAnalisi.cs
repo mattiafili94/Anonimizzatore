@@ -49,6 +49,14 @@ public sealed class PreAnalisi : TSqlFragmentVisitor
             case FunctionStatementBody n: Dichiara(n.Name, Ruolo.Funzione); break;
             case TriggerStatementBody n: Dichiara(n.Name, Ruolo.Trigger); break;
 
+            // --- ruoli (così GRANT ... TO nome sa che nome è un ruolo) ---
+            case CreateRoleStatement { Name: not null } n:
+                _conoscenza.DichiaraPrincipale(n.Name.Value, Ruolo.RuoloDb);
+                break;
+            case CreateApplicationRoleStatement { Name: not null } n:
+                _conoscenza.DichiaraPrincipale(n.Name.Value, Ruolo.RuoloDb);
+                break;
+
             // --- constraint e indici ---
             case ConstraintDefinition n when n.ConstraintIdentifier is not null:
                 _conoscenza.DichiaraVincolo(n.ConstraintIdentifier.Value, Classificatore.RuoloVincolo(n));
