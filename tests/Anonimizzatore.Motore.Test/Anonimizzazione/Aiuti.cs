@@ -1,5 +1,5 @@
-using System.Text.RegularExpressions;
 using Anonimizzatore.Motore.Anonimizzazione;
+using Anonimizzatore.Motore.Deanonimizzazione;
 using Anonimizzatore.Motore.Lettura;
 using Anonimizzatore.Motore.Mappa;
 using Anonimizzatore.Motore.Profili;
@@ -7,7 +7,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace Anonimizzatore.Motore.Test.Anonimizzazione;
 
-internal static partial class Aiuti
+internal static class Aiuti
 {
     public static string LeggiEsempio(string nome) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Esempi", nome));
@@ -20,18 +20,12 @@ internal static partial class Aiuti
         return esito.Testo!;
     }
 
-    public static Profilo NuovoProfilo() => new() { Nome = "Prova" };
+    public static Profilo NuovoProfilo(params string[] blacklist) =>
+        new() { Nome = "Prova", Blacklist = [.. blacklist] };
 
-    [GeneratedRegex(@"(?<![\w@#])(?:#{1,2}tmp|srv|db|sch|dom|tbl|vw|usp|fn|trg|usr|rol|job|ix|pk|fk|df|ck|uq)_\d+(?!\w)",
-        RegexOptions.IgnoreCase)]
-    private static partial Regex NomeAnonimo();
-
-    /// <summary>
-    /// Ripristino SEMPLICE solo per i test di andata e ritorno. Il vero ripristino sul testo libero dell'IA è il
-    /// <c>DeAnonimizzatore</c> (tappa 12), che è un'altra cosa.
-    /// </summary>
+    /// <summary>Ripristina i nomi con il vero <see cref="DeAnonimizzatore"/>: serve alle prove di andata e ritorno.</summary>
     public static string RipristinaPerProva(string testo, MappaCliente mappa) =>
-        NomeAnonimo().Replace(testo, m => mappa.TrovaOriginale(m.Value)?.Originale ?? m.Value);
+        new DeAnonimizzatore(mappa).DeAnonimizza(testo).Testo;
 
     /// <summary>Gli identificatori (senza parentesi) che compaiono nel testo, come li vede ScriptDom.</summary>
     public static HashSet<string> Identificatori(string sql)

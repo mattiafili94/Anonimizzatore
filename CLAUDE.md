@@ -45,7 +45,24 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     `Ruolo` (famiglie `dir`, `file`, `ip`, `mail`).
   Da fare quando si agganciano: il `DeAnonimizzatore` dovrà ripristinare anche i segnaposto commento e i valori
   dell'infrastruttura; i test di andata e ritorno useranno quello vero al posto di `Aiuti.RipristinaPerProva`.
-- **Prossimo passo**: tappa 4 (colonne, variabili, alias, indici e constraint, nomi composti `FK_Clienti_Ordini`).
+- **Tappa 4 fatta** (10/11/2026): colonne, variabili, parametri, alias, indici e constraint, 331 test verdi. Novità:
+  - tipi ricavati dallo script (`Conoscenza.DichiaraTipo`): CREATE/ALTER TABLE, parametri, DECLARE (dichiarati) e
+    CAST/CONVERT (dedotti, valgono solo se manca il dichiarato) → `col_vc20_001`, `@p_vc20_001`, altrimenti `col_x_`;
+  - nuovo ruolo `Alias` (famiglia `al_`) per alias di tabella e nomi di CTE; gli alias di **colonna** (`AS Totale`) sono
+    `Colonna`, perché poi si usano come colonne (`ORDER BY Totale`);
+  - `Blacklist` (per parole: `Acme` coincide con `AcmeOrdini`, `@CodiceAcme`, `acme_srl`; non con `Acmeria`) e
+    `Parole.Dividi` (underscore/CamelCase/cifre). La blacklist **non** tocca gli oggetti di sistema;
+  - i parametri con nome di procedure di sistema (`@job_name`) e `@@variabili` non si toccano mai;
+  - nomi composti di indici/constraint (fase B, dopo che tutti gli oggetti hanno il nome anonimo): si sostituiscono le
+    parti pulite (`FK_Righe_Ordini` → `FK_tbl_002_tbl_001`); se una parte è attaccata ad altro (`IXOrdini`,
+    `IX_Ordini2`) o c'è una parola in blacklist o la matrice lo chiede → nome intero (`ix_001`, `pk_001`...);
+  - `AnonimizzatoreScript` lavora a fasi: A = oggetti/colonne/variabili/alias, B = indici e constraint;
+  - le prove di andata e ritorno usano il vero `DeAnonimizzatore` (aggiunto il prefisso `al_`).
+  - Scelta: una colonna che ha per caso lo stesso nome di una tabella (`... AS Righe`) resta in chiaro, come tutte le
+    colonne.
+- **Prossimo passo**: tappa 5 (rimane la **whitelist**, per nome intero e per parole, con la lista base di parole
+  generiche; la blacklist per parole c'è già dalla tappa 4). Poi 6-13 (aggancio di commenti, sicurezza, stringhe e
+  SQL dinamico, SQLCMD/modalità di riserva, legenda, de-anonimizzazione completa, anti-fuga).
 
 ## Regole fisse (repo pubblica)
 

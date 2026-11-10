@@ -5,8 +5,8 @@ namespace Anonimizzatore.Motore.Classificazione;
 
 /// <summary>Un nome trovato nello script, con il ruolo che gli è stato dato.</summary>
 /// <param name="IndiceToken">Posizione del token da sostituire nel testo originale.</param>
-/// <param name="Ruolo">Che cosa rappresenta (tabella, schema, procedura...).</param>
-/// <param name="Nome">Il nome senza parentesi.</param>
+/// <param name="Ruolo">Che cosa rappresenta (tabella, colonna, parametro...).</param>
+/// <param name="Nome">Il nome senza parentesi (le variabili con la @).</param>
 /// <param name="Apici">Come era scritto: nudo, tra [parentesi] o tra "doppi apici".</param>
 /// <param name="DiSistema">Vero se è un oggetto di sistema: non va mai anonimizzato.</param>
 public sealed record NomeTrovato(int IndiceToken, Ruolo Ruolo, string Nome, QuoteType Apici, bool DiSistema);
@@ -15,9 +15,9 @@ public sealed record NomeTrovato(int IndiceToken, Ruolo Ruolo, string Nome, Quot
 public sealed record Avviso(string Messaggio, int Riga = 0);
 
 /// <summary>
-/// Passo 2 del motore: percorre l'albero sintattico e dà un <see cref="Ruolo"/> a ogni nome di oggetto (livello 1:
-/// server, database, schema, tabelle, viste, procedure, funzioni, trigger, temporanee). Non cambia il testo.
-/// Colonne, variabili e constraint arrivano nella tappa 4.
+/// Passo 2 del motore: percorre l'albero sintattico e dà un <see cref="Ruolo"/> a ogni nome: oggetti (server,
+/// database, schema, tabelle, viste, procedure, funzioni, trigger, temporanee), colonne, variabili e parametri,
+/// alias di tabella, indici e constraint. Non cambia il testo e non decide cosa anonimizzare.
 /// </summary>
 public sealed class Classificatore : TSqlFragmentVisitor
 {
@@ -28,6 +28,7 @@ public sealed class Classificatore : TSqlFragmentVisitor
     private readonly Dictionary<int, NomeTrovato> _trovati = [];
     private readonly Dictionary<SchemaObjectName, Ruolo> _previsti = [];
     private readonly HashSet<SchemaObjectName> _ignorati = [];
+    private readonly HashSet<VariableReference> _variabiliDiSistema = [];
     private readonly List<Avviso> _avvisi = [];
 
     private Classificatore(Conoscenza conoscenza, PreAnalisi pre)
@@ -45,19 +46,36 @@ public sealed class Classificatore : TSqlFragmentVisitor
         return ([.. c._trovati.Values.OrderBy(n => n.IndiceToken)], c._avvisi);
     }
 
+    /// <summary>Le variabili si chiamano sempre con la @ davanti, comunque le restituisca ScriptDom.</summary>
+    public static string NomeVariabile(string nome) => nome.StartsWith('@') ? nome : "@" + nome;
+
+    /// <summary>Che tipo di constraint è: serve al prefisso se il nome intero va anonimizzato (<c>pk_001</c>, <c>fk_001</c>...).</summary>
+    public static Ruolo RuoloVincolo(ConstraintDefinition vincolo) => vincolo switch
+    {
+        UniqueConstraintDefinition { IsPrimaryKey: true } => Ruolo.PrimaryKey,
+        UniqueConstraintDefinition => Ruolo.Unique,
+        ForeignKeyConstraintDefinition => Ruolo.ForeignKey,
+        DefaultConstraintDefinition => Ruolo.Default,
+        _ => Ruolo.Check,
+    };
+
     // Visit(TSqlFragment) è chiamato per ogni nodo, prima dei suoi figli: il genitore può quindi dire che ruolo
     // hanno i nomi che contiene.
     public override void Visit(TSqlFragment nodo)
     {
-        // Alias con lo stesso nome di un oggetto vero (FROM dbo.Clienti AS Clienti): va sostituito insieme all'oggetto.
-        if (nodo is TableReferenceWithAlias conAlias && conAlias.Alias is { } alias && ENomeDiOggetto(alias.Value))
-            Aggiungi(alias, _conoscenza.RuoloComeTabella(alias.Value), sistema: false);
+        // Alias di tabella. Se coincide con un oggetto vero (FROM dbo.Clienti AS Clienti) va sostituito insieme
+        // all'oggetto; altrimenti è un alias.
+        if (nodo is TableReferenceWithAlias conAlias && conAlias.Alias is { } alias)
+            Aggiungi(alias, ENomeDiOggetto(alias.Value) ? _conoscenza.RuoloComeTabella(alias.Value) : Ruolo.Alias, sistema: false);
 
         switch (nodo)
         {
-            // --- dichiarazioni ---
+            // --- dichiarazioni di oggetti ---
             case CreateTableStatement n: Preved(n.SchemaObjectName, Ruolo.Tabella); break;
-            case ViewStatementBody n: Preved(n.SchemaObjectName, Ruolo.Vista); break;
+            case ViewStatementBody n:
+                Preved(n.SchemaObjectName, Ruolo.Vista);
+                Colonne(n.Columns);
+                break;
             case ProcedureStatementBody n: Preved(n.ProcedureReference?.Name, Ruolo.Procedura); break;
             case FunctionStatementBody n: Preved(n.Name, Ruolo.Funzione); break;
             case TriggerStatementBody n: Preved(n.Name, Ruolo.Trigger); break;
@@ -66,23 +84,73 @@ public sealed class Classificatore : TSqlFragmentVisitor
             case UseStatement n: AggiungiDatabase(n.DatabaseName); break;
             case DropObjectsStatement n: PrevediDrop(n); break;
 
-            // --- riferimenti ---
-            case ExecutableProcedureReference n:
-                Preved(n.ProcedureReference?.ProcedureReference?.Name, Ruolo.Procedura);
-                break;
+            // --- riferimenti a oggetti ---
+            case ExecutableProcedureReference n: ChiamataProcedura(n); break;
             case SchemaObjectFunctionTableReference n: Preved(n.SchemaObject, Ruolo.Funzione); break;
             case OpenQueryTableReference n when n.LinkedServer is not null:
                 Aggiungi(n.LinkedServer, Ruolo.LinkedServer, sistema: false);
                 break;
             case NamedTableReference n when ELocale(n.SchemaObject):
+                // FROM Recenti (CTE) o UPDATE o (alias): non è un oggetto.
                 _ignorati.Add(n.SchemaObject);
+                Aggiungi(n.SchemaObject.BaseIdentifier, Ruolo.Alias, NomiPseudoTabella.Contains(n.SchemaObject.BaseIdentifier.Value));
                 break;
             case FunctionCall n: ChiamataFunzione(n); break;
-            case ColumnReferenceExpression n when n.ColumnType == ColumnType.Regular && n.MultiPartIdentifier is not null:
-                Qualificatori([.. n.MultiPartIdentifier.Identifiers.SkipLast(1)]);
+
+            // --- colonne ---
+            case ColumnReferenceExpression { ColumnType: ColumnType.Regular, MultiPartIdentifier: { Identifiers.Count: > 0 } mp }:
+                Qualificatori([.. mp.Identifiers.SkipLast(1)]);
+                Aggiungi(mp.Identifiers[^1], Ruolo.Colonna, sistema: false);
                 break;
-            case SelectStarExpression n when n.Qualifier is not null:
+            case SelectStarExpression { Qualifier: not null } n:
                 Qualificatori([.. n.Qualifier.Identifiers]);
+                break;
+            case ColumnDefinition n when n.ColumnIdentifier is not null:
+                Aggiungi(n.ColumnIdentifier, Ruolo.Colonna, sistema: false);
+                break;
+            case AlterTableAlterColumnStatement n when n.ColumnIdentifier is not null:
+                Aggiungi(n.ColumnIdentifier, Ruolo.Colonna, sistema: false);
+                break;
+            case AlterTableDropTableElementStatement n:
+                foreach (var elemento in n.AlterTableDropTableElements.Where(e => e.Name is not null))
+                    if (elemento.TableElementType == TableElementType.Column)
+                        Aggiungi(elemento.Name, Ruolo.Colonna, sistema: false);
+                    else
+                        Aggiungi(elemento.Name, _conoscenza.RuoloVincolo(elemento.Name.Value) ?? Ruolo.Check, sistema: false);
+                break;
+            case SelectScalarExpression { ColumnName.Identifier: { } nomeColonna }:
+                Aggiungi(nomeColonna, Ruolo.Colonna, sistema: false); // alias di colonna: si usa come una colonna
+                break;
+            case CommonTableExpression n:
+                if (n.ExpressionName is not null) Aggiungi(n.ExpressionName, Ruolo.Alias, sistema: false);
+                Colonne(n.Columns);
+                break;
+            case QueryDerivedTable n: Colonne(n.Columns); break;
+            case InlineDerivedTable n: Colonne(n.Columns); break;
+
+            // --- indici e constraint ---
+            case ConstraintDefinition n:
+                if (n.ConstraintIdentifier is not null) Aggiungi(n.ConstraintIdentifier, RuoloVincolo(n), sistema: false);
+                if (n is ForeignKeyConstraintDefinition fk)
+                {
+                    Colonne(fk.Columns);
+                    Colonne(fk.ReferencedTableColumns);
+                }
+                break;
+            case CreateIndexStatement n when n.Name is not null: Aggiungi(n.Name, Ruolo.Indice, sistema: false); break;
+            case IndexDefinition n when n.Name is not null: Aggiungi(n.Name, Ruolo.Indice, sistema: false); break;
+            case AlterIndexStatement n when n.Name is not null: Aggiungi(n.Name, Ruolo.Indice, sistema: false); break;
+            case DropIndexClause n when n.Index is not null: Aggiungi(n.Index, Ruolo.Indice, sistema: false); break;
+
+            // --- variabili e parametri ---
+            case ProcedureParameter n when n.VariableName is not null: AggiungiVariabile(n.VariableName, Ruolo.Parametro); break;
+            case DeclareVariableElement n when n.VariableName is not null: AggiungiVariabile(n.VariableName, Ruolo.Variabile); break;
+            case DeclareTableVariableBody n when n.VariableName is not null: AggiungiVariabile(n.VariableName, Ruolo.Variabile); break;
+            case VariableReference n when !_variabiliDiSistema.Contains(n) && n.FirstTokenIndex >= 0:
+                var nomeVariabile = NomeVariabile(n.Name);
+                _trovati.TryAdd(n.FirstTokenIndex, new NomeTrovato(n.FirstTokenIndex,
+                    _pre.Parametri.Contains(nomeVariabile) ? Ruolo.Parametro : Ruolo.Variabile,
+                    nomeVariabile, QuoteType.NotQuoted, DiSistema: false));
                 break;
 
             // --- tipi di dato: non sono oggetti del cliente ---
@@ -117,6 +185,18 @@ public sealed class Classificatore : TSqlFragmentVisitor
         };
         if (ruolo is null) return;
         foreach (var oggetto in drop.Objects) Preved(oggetto, ruolo.Value);
+    }
+
+    private void ChiamataProcedura(ExecutableProcedureReference chiamata)
+    {
+        var nome = chiamata.ProcedureReference?.ProcedureReference?.Name;
+        Preved(nome, Ruolo.Procedura);
+
+        // I parametri con nome di una procedura di sistema (@job_name = ...) sono di SQL Server, non del cliente.
+        if (nome?.BaseIdentifier is { } id
+            && ListeBase.OggettoDiSistema(Ruolo.Procedura, id.Value, nome.SchemaIdentifier?.Value))
+            foreach (var p in chiamata.Parameters.Where(p => p.Variable is not null))
+                _variabiliDiSistema.Add(p.Variable);
     }
 
     private void ProcessaNome(SchemaObjectName nome)
@@ -157,7 +237,13 @@ public sealed class Classificatore : TSqlFragmentVisitor
         if (prefissi.Count == 0) return;
 
         var ultimo = prefissi[^1];
-        if (prefissi.Count == 1 && (ultimo.Value.StartsWith('@') || ELocale(ultimo.Value))) return; // alias, CTE, inserted...
+        if (prefissi.Count == 1 && ultimo.Value.StartsWith('@')) return; // variabile tabella
+
+        if (prefissi.Count == 1 && ELocale(ultimo.Value)) // alias, CTE, inserted/deleted
+        {
+            Aggiungi(ultimo, Ruolo.Alias, NomiPseudoTabella.Contains(ultimo.Value));
+            return;
+        }
 
         var ruoloTabella = ultimo.Value.StartsWith('#') ? Ruolo.Temporanea : _conoscenza.RuoloComeTabella(ultimo.Value);
         var schema = prefissi.Count >= 2 ? prefissi[^2].Value : null;
@@ -182,9 +268,22 @@ public sealed class Classificatore : TSqlFragmentVisitor
         }
     }
 
+    private void Colonne(IEnumerable<Identifier>? nomi)
+    {
+        if (nomi is null) return;
+        foreach (var nome in nomi) Aggiungi(nome, Ruolo.Colonna, sistema: false);
+    }
+
+    private void AggiungiVariabile(Identifier id, Ruolo ruolo)
+    {
+        if (id.FirstTokenIndex < 0) return;
+        var nome = NomeVariabile(id.Value);
+        _trovati.TryAdd(id.FirstTokenIndex, new NomeTrovato(id.FirstTokenIndex, ruolo, nome, QuoteType.NotQuoted, DiSistema: false));
+    }
+
     private void AggiungiDatabase(Identifier id) => Aggiungi(id, Ruolo.Database, ListeBase.DatabaseDiSistema(id.Value));
 
-    private void Aggiungi(Identifier id, Ruolo ruolo, bool sistema)
+    private void Aggiungi(Identifier? id, Ruolo ruolo, bool sistema)
     {
         if (id is null || id.FirstTokenIndex < 0) return;
         _trovati.TryAdd(id.FirstTokenIndex, new NomeTrovato(id.FirstTokenIndex, ruolo, id.Value, id.QuoteType, sistema));

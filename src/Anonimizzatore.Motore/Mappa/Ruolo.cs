@@ -28,6 +28,9 @@ public enum Ruolo
     Parametro,
     Temporanea,
 
+    /// <summary>Alias di tabella e nomi di CTE (gli alias di colonna sono <see cref="Colonna"/>: si usano come colonne).</summary>
+    Alias,
+
     // Livello 3 (infrastruttura): percorsi, IP, email
     Cartella,
     File,
@@ -64,6 +67,7 @@ public static class FamigliaRuolo
         Ruolo.Colonna => "col",
         Ruolo.Variabile or Ruolo.Parametro => "var",
         Ruolo.Temporanea => "tmp",
+        Ruolo.Alias => "al",
         Ruolo.Cartella => "dir",
         Ruolo.File => "file",
         Ruolo.Ip => "ip",

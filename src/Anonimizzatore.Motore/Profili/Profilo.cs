@@ -36,7 +36,7 @@ public sealed class Profilo
     public static IReadOnlyDictionary<Ruolo, Trattamento> MatriceDefault { get; } =
         Enum.GetValues<Ruolo>().ToDictionary(r => r, r => r switch
         {
-            Ruolo.Colonna or Ruolo.Variabile or Ruolo.Parametro or Ruolo.Temporanea
+            Ruolo.Colonna or Ruolo.Variabile or Ruolo.Parametro or Ruolo.Temporanea or Ruolo.Alias
                 or Ruolo.Indice or Ruolo.PrimaryKey or Ruolo.ForeignKey
                 or Ruolo.Default or Ruolo.Check or Ruolo.Unique => Trattamento.InChiaro,
             _ => Trattamento.Anonimizza,
