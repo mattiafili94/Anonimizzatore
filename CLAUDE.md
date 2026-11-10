@@ -251,6 +251,13 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   **Limiti**: dentro un testo il nome torna con le maiuscole della prima scrittura (`/report/vendite` → `/report/Vendite`); le righe
   SQLCMD (`:setvar`) non passano da qui; parole spezzate su più stringhe concatenate non si riconoscono; un nome noto uguale a una parola
   comune cambia anche nei messaggi (si ripristina al ritorno).
+- **Nomi parlanti per le variabili** (10/11/2026, 656 test verdi): `NomiParlanti.Da(nome)` (stesso criterio dei `:setvar`): il nome di una
+  variabile dice cosa contiene la stringa che le si assegna. `DECLARE @DBName nvarchar(128) = 'Vendite'` → `'db_01'`; `@Server`/`@Host` →
+  server, `@SchemaName` → schema, `@UserName`/`@Owner` → login, `@JobName` → job, `@Pwd`/`@Password` → `<password>` (mai in mappa). Vale per
+  `DECLARE`, `SET`, `SELECT @x = ...`, parametri con valore predefinito e argomenti con nome di `EXEC`. Inoltre `DB_ID('x')`,
+  `DATABASEPROPERTYEX('x', ...)` e `colonna_database = 'x'` (es. `database_name` di msdb). Nomi che parlano di percorsi, file o testi
+  (`@BackupPath`, `@DatabaseNote`) sono esclusi; i database di sistema restano in chiaro. Una volta in mappa, il nome si sostituisce anche
+  nelle altre stringhe. **Limite**: un nome che arriva solo da una variabile con un nome non parlante (`@X = 'Vendite'`) non si riconosce.
 
 ## Stato della fase 1 (10/11/2026)
 

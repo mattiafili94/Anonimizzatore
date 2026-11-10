@@ -172,8 +172,18 @@ public sealed class Classificatore : TSqlFragmentVisitor
             case DropIndexClause n when n.Index is not null: Aggiungi(n.Index, Ruolo.Indice, sistema: false); break;
 
             // --- variabili e parametri ---
-            case ProcedureParameter n when n.VariableName is not null: AggiungiVariabile(n.VariableName, Ruolo.Parametro); break;
-            case DeclareVariableElement n when n.VariableName is not null: AggiungiVariabile(n.VariableName, Ruolo.Variabile); break;
+            case ProcedureParameter n when n.VariableName is not null:
+                AggiungiVariabile(n.VariableName, Ruolo.Parametro);
+                ValoreDaNome(n.VariableName.Value, n.Value);
+                break;
+            case DeclareVariableElement n when n.VariableName is not null:
+                AggiungiVariabile(n.VariableName, Ruolo.Variabile);
+                ValoreDaNome(n.VariableName.Value, n.Value);
+                break;
+            case SetVariableStatement n when n.Variable is not null: ValoreDaNome(n.Variable.Name, n.Expression); break;
+            case SelectSetVariable n when n.Variable is not null: ValoreDaNome(n.Variable.Name, n.Expression); break;
+            case ExecuteParameter { Variable: not null } n: ValoreDaNome(n.Variable.Name, n.ParameterValue); break;
+            case BooleanComparisonExpression n: ConfrontoConColonna(n); break;
             case DeclareTableVariableBody n when n.VariableName is not null: AggiungiVariabile(n.VariableName, Ruolo.Variabile); break;
             case VariableReference n when !_variabiliDiSistema.Contains(n) && n.FirstTokenIndex >= 0:
                 var nomeVariabile = NomeVariabile(n.Name);
@@ -381,6 +391,41 @@ public sealed class Classificatore : TSqlFragmentVisitor
         }
     }
 
+    /// <summary>
+    /// <c>DECLARE @DBName nvarchar(128) = 'Vendite'</c>, <c>SET @Server = 'SRV01'</c>, <c>EXEC usp_x @Password = '...'</c>: il nome della
+    /// variabile dice che cosa contiene la stringa (database, server, schema, utente, job; password → cancellata).
+    /// </summary>
+    private void ValoreDaNome(string? nomeVariabile, ScalarExpression? valore)
+    {
+        if (nomeVariabile is null || valore is not StringLiteral s || s.Value.Length == 0) return;
+        var contenuto = NomiParlanti.Da(nomeVariabile);
+        if (contenuto == Contenuto.Password) { NascondiSegreto(s, TipoSegreto.Password); return; }
+        DaContenuto(s, contenuto);
+    }
+
+    /// <summary><c>WHERE database_name = 'Vendite'</c> (come in msdb.dbo.backupset): una colonna che si chiama come un database.</summary>
+    private void ConfrontoConColonna(BooleanComparisonExpression confronto)
+    {
+        if (confronto.ComparisonType != BooleanComparisonType.Equals) return;
+        var (colonna, valore) = confronto.FirstExpression is ColumnReferenceExpression c1 && confronto.SecondExpression is StringLiteral s1 ? (c1, s1)
+            : confronto.SecondExpression is ColumnReferenceExpression c2 && confronto.FirstExpression is StringLiteral s2 ? (c2, s2)
+            : (null, null);
+        if (colonna?.MultiPartIdentifier is not { Identifiers.Count: > 0 } mp || valore is null || valore.Value.Length == 0) return;
+        DaContenuto(valore, NomiParlanti.DaColonna(mp.Identifiers[^1].Value));
+    }
+
+    private void DaContenuto(StringLiteral s, Contenuto contenuto)
+    {
+        switch (contenuto)
+        {
+            case Contenuto.Database: Stringa(s, Ruolo.Database, ListeBase.DatabaseDiSistema(s.Value)); break;
+            case Contenuto.Server: Stringa(s, Ruolo.Server, ListeBase.ServerLocale(s.Value)); break;
+            case Contenuto.Schema: Stringa(s, Ruolo.Schema, ListeBase.SchemaPredefinito(s.Value)); break;
+            case Contenuto.Login: Stringa(s, Ruolo.Login, ListeBase.PrincipaleDiSistema(s.Value)); break;
+            case Contenuto.Job: Stringa(s, Ruolo.Job, sistema: false); break;
+        }
+    }
+
     // --- backup, restore e file di database ---
 
     /// <summary>Nome di un database in <c>BACKUP DATABASE x</c> / <c>RESTORE DATABASE x</c>: un identificatore, una stringa o una variabile.</summary>
@@ -545,6 +590,11 @@ public sealed class Classificatore : TSqlFragmentVisitor
 
     private void ChiamataFunzione(FunctionCall chiamata)
     {
+        // DB_ID('Vendite'), DATABASEPROPERTYEX('Vendite', 'Status'): il primo argomento è un database.
+        if (chiamata.FunctionName?.Value is "DB_ID" or "HAS_DBACCESS" or "DATABASEPROPERTYEX" or "DATABASEPROPERTY"
+            && chiamata.Parameters.Count > 0 && chiamata.Parameters[0] is StringLiteral nomeDb && nomeDb.Value.Length > 0)
+            Stringa(nomeDb, Ruolo.Database, ListeBase.DatabaseDiSistema(nomeDb.Value));
+
         // Solo le chiamate con prefisso (dbo.fnSconto(...)): senza prefisso sono funzioni predefinite (GETDATE...).
         if (chiamata.CallTarget is not MultiPartIdentifierCallTarget target || chiamata.FunctionName is null) return;
         if (ListeBase.MetodoDiOggetto(chiamata.FunctionName.Value)) return;
