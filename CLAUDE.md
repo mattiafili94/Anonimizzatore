@@ -134,10 +134,37 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     `/report/vendite`, messaggi di `PRINT/RAISERROR`) restano in chiaro (livello 4, v1 fuori; li segnalerà l'anti-fuga della
     tappa 13); le voci della matrice per `Cartella`/`File`/`Ip`/`Email` non sono ancora rispettate (l'analizzatore
     anonimizza sempre); la blacklist non entra ancora nelle stringhe.
-- **Prossimo passo**: tappa 9 (SQL dinamico: stringa completa analizzata come T-SQL in modo ricorsivo con apici raddoppiati,
-  `EXEC('...')`, `sp_executesql`, `@command` di `sp_add_jobstep`; frammenti concatenati → sostituzione per dizionario +
-  avviso; commenti dentro il SQL dinamico). Poi 10-13 (SQLCMD/modalità di riserva, legenda, de-anonimizzazione completa,
-  anti-fuga).
+- **Tappa 9 fatta** (10/11/2026): SQL dinamico e job di SQL Agent, 445 test verdi. `AnonimizzatoreScript` ora lavora su
+  **unità** (`Unita`): uno script, oppure una stringa che contiene T-SQL (`SqlDinamico.TrovaFigli`). Novità:
+  - **ricorsione**: una stringa la cui prima parola è un inizio di istruzione e che ScriptDom legge senza errori (con gli apici
+    raddoppiati tolti) è una unità figlia, trattata come uno script a sé con la stessa mappa (nomi, tipi, commenti,
+    stringhe); fino a 8 livelli. Alla fine torna nella stringa della madre con gli apici raddoppiati. Funziona per
+    `EXEC('...')`, `sp_executesql`, stringhe in variabili, `@command` di `sp_add_jobstep`;
+  - `sp_executesql`: la dichiarazione dei parametri (`N'@c varchar(20), @n int OUTPUT'`) è una unità (letta dentro un
+    `CREATE PROCEDURE sys.__anonimizzatore__ ... AS SELECT 1` aggiunto e poi tolto), e gli argomenti (`@c = ...`) sono
+    variabili del cliente: stessi nomi nella stringa, nella dichiarazione e negli argomenti (solo `@stmt`/`@params` sono di
+    sistema);
+  - una stringa riconosciuta come nome o segreto (`EXECUTE AS USER = 'Select Mario'`) non è SQL: l'unità figlia è scartata;
+  - **SQL a pezzi o con errori** (la stringa inizia come SQL ma non è valida: `' FROM '`, `N'SELECT * FROM ' + @t`):
+    sostituzione per dizionario dei nomi già in mappa (`SqlDinamico.Dizionario`: parole intere, anche tra `[ ]`, mai una
+    variabile al posto di un oggetto) + avviso con la riga. Una stringa che è **solo un nome di oggetto**
+    (`OBJECT_ID(N'dbo.Ordini')`, `@tabella = N'Ordini'`, `COL_LENGTH('dbo.Ordini','Col')`) si sostituisce per dizionario
+    senza avviso;
+  - **job**: `sp_add_job`, `sp_update_job`, `sp_delete_job`, `sp_start_job`, `sp_stop_job`, `sp_add_jobstep`,
+    `sp_update_jobstep`, `sp_add_jobserver`... (tabella in `ProcedureSicurezza`): `@job_name` → `Ruolo.Job` (`job_001`),
+    `@owner_login_name`, `@database_name`, `@server`/`@server_name`. `(local)`, `.`, `localhost` restano. `@step_name` e le
+    descrizioni sono testo libero (non sostituiti);
+  - **righe di comando** (`xp_cmdshell`, passo di job non TSQL): lette come testo libero (`RisultatoClassificazione.Comandi`),
+    così `/E` non diventa una cartella;
+  - nel ripristino un nome intero dentro una stringa (`N'job_001'`) non prende le parentesi quadre;
+  - `sysname` non dà più l'avviso "tipo definito dall'utente".
+  - **Limiti noti**: un commento `--` che chiude una stringa (`N'SELECT 1 -- nota'`) torna con un a capo prima dell'apice
+    (il ripristino non può sapere che dopo c'è la fine della stringa); i pezzi di SQL che non iniziano con una parola
+    chiave (`'.dbo.'`, `'[dbo].['`) e i nomi che arrivano da variabili non si riconoscono (avviso); i numeri dei
+    segnaposto dei commenti seguono prima il SQL dinamico poi gli script.
+- **Prossimo passo**: tappa 10 (SQLCMD e modalità di riserva: righe `:setvar`/`:connect`, `GO` con conteggio; script con
+  errori di sintassi → solo token + dizionario, con avviso, invece di non restituire nulla). Poi 11 (legenda e testo unico da
+  copiare), 12 (de-anonimizzazione: rifinire, report), 13 (controllo anti-fuga).
 
 ## Regole fisse (repo pubblica)
 

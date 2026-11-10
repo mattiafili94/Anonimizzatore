@@ -19,12 +19,15 @@ public sealed record RisultatoAnonimizzazione(IReadOnlyList<ScriptAnonimizzato> 
 /// <summary>
 /// Punto d'ingresso del motore. Tutti gli script di una chiamata condividono la stessa mappa. Passi:
 /// <list type="number">
-/// <item>lettura (ScriptDom) e primo giro su tutti gli script (CREATE, tipi, constraint, alias);</item>
-/// <item>classificazione dei nomi di ogni script;</item>
+/// <item>lettura (ScriptDom). Ogni stringa che contiene T-SQL valido (SQL dinamico) o la dichiarazione dei parametri di
+/// <c>sp_executesql</c> diventa una <i>sotto-unità</i> trattata come uno script a sé, in modo ricorsivo;</item>
+/// <item>primo giro su tutte le unità (CREATE, tipi, constraint, alias) e classificazione dei nomi;</item>
 /// <item>decisione per ogni nome: sistema → in chiaro; blacklist → anonimizzato; altrimenti la matrice del profilo;</item>
 /// <item>fase A: nomi di oggetti, colonne, variabili e alias; fase B: nomi composti di indici e constraint
 /// (<c>FK_Righe_Ordini</c> → <c>FK_tbl_001_tbl_002</c>), quando tutti gli oggetti hanno già il loro nome anonimo;</item>
-/// <item>sostituzione sui token del testo originale.</item>
+/// <item>sostituzione sui token del testo originale; password e SID cancellati;</item>
+/// <item>fase C, dalle unità più interne alle più esterne: stringhe (percorsi, IP, email... e pezzi di SQL costruito a
+/// mano) e commenti; il SQL dinamico anonimizzato torna dentro la stringa che lo conteneva.</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -47,12 +50,36 @@ public static class AnonimizzatoreScript
     private const string SidSegnaposto = "0x00000000000000000000000000000000";
     private const string PasswordSegnaposto = "<password>";
 
-    private sealed record Elaborato(
-        ScriptLetto Letto, PreAnalisi? Pre, RisultatoClassificazione? Classificazione)
+    /// <summary>
+    /// Uno script, oppure una stringa di SQL dinamico trovata dentro un altro (la sua <see cref="Padre"/>). Le unità si
+    /// elaborano insieme, con la stessa mappa; alla fine ogni figlia torna dentro la stringa della madre.
+    /// </summary>
+    private sealed class Unita(ScriptLetto letto)
     {
+        public ScriptLetto Letto { get; } = letto;
+        public Unita? Padre { get; init; }
+        public int TokenNelPadre { get; init; } = -1;
+        public string Prefisso { get; init; } = "";
+        public string Suffisso { get; init; } = "";
+        public int Profondita { get; init; }
+
+        public PreAnalisi? Pre { get; set; }
+        public RisultatoClassificazione? Classificazione { get; set; }
+
+        /// <summary>Vero se la stringa è stata riconosciuta come un nome o un segreto (<c>EXECUTE AS USER = '...'</c>): non è SQL.</summary>
+        public bool Scartata { get; set; }
+
         public IReadOnlyList<NomeTrovato> Nomi => Classificazione?.Nomi ?? [];
-        public IReadOnlyList<Avviso> Avvisi => Classificazione?.Avvisi ?? [];
         public Dictionary<int, string> Sostituzioni { get; } = [];
+
+        /// <summary>Le stringhe di SQL dinamico di questa unità, già anonimizzate (senza prefisso e suffisso), per posizione.</summary>
+        public Dictionary<int, string> Figlie { get; } = [];
+        public List<Avviso> AvvisiDelleFiglie { get; } = [];
+
+        /// <summary>Posizioni delle stringhe che sono nomi o segreti (non possono essere SQL).</summary>
+        public HashSet<int> StringheReclamate() =>
+            Nomi.Where(n => n.DaStringa).Select(n => n.IndiceToken)
+                .Concat(Classificazione?.Segreti.Select(s => s.IndiceToken) ?? []).ToHashSet();
     }
 
     public static RisultatoAnonimizzazione Anonimizza(IReadOnlyList<string> script, Profilo profilo, MappaCliente mappa)
@@ -61,109 +88,182 @@ public static class AnonimizzatoreScript
         ArgumentNullException.ThrowIfNull(profilo);
         ArgumentNullException.ThrowIfNull(mappa);
 
-        var letti = script.Select(LettoreScript.Leggi).ToList();
+        var unita = script.Select(s => new Unita(LettoreScript.Leggi(s))).ToList();
+        var radici = unita.Count;
+
+        // SQL dinamico: ogni stringa che è T-SQL valido è un'unità figlia; vale anche per quelle dentro le figlie.
+        // (la lista cresce mentre la si scorre: le figlie vengono dopo le madri)
+        for (var i = 0; i < unita.Count; i++)
+        {
+            var u = unita[i];
+            if (!u.Letto.Valido || u.Profondita >= SqlDinamico.ProfonditaMassima) continue;
+            foreach (var f in SqlDinamico.TrovaFigli(u.Letto))
+                unita.Add(new Unita(f.Letto)
+                {
+                    Padre = u, TokenNelPadre = f.Token, Prefisso = f.Prefisso, Suffisso = f.Suffisso, Profondita = u.Profondita + 1,
+                });
+        }
 
         // I nomi veri presenti negli script non devono mai coincidere con un nome generato.
-        foreach (var letto in letti)
-            mappa.AggiungiNomiRiservati(letto.Token
+        foreach (var u in unita)
+            mappa.AggiungiNomiRiservati(u.Letto.Token
                 .Where(t => t.TokenType is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier)
                 .Select(t => t.Text));
 
-        // Giro 1 su tutti gli script: i CREATE e i tipi di uno servono a classificare i riferimenti degli altri.
+        // Giro 1 su tutte le unità: i CREATE e i tipi di una servono a classificare i riferimenti delle altre.
         var conoscenza = Conoscenza.Da(mappa);
-        var pre = new Dictionary<ScriptLetto, PreAnalisi>();
-        foreach (var letto in letti.Where(l => l.Valido))
+        foreach (var u in unita.Where(u => u.Letto.Valido))
         {
-            var p = new PreAnalisi(conoscenza);
-            letto.Albero.Accept(p);
-            pre[letto] = p;
+            u.Pre = new PreAnalisi(conoscenza);
+            u.Letto.Albero.Accept(u.Pre);
         }
 
         // Giro 2: classificazione.
-        var elaborati = letti.Select(l =>
-        {
-            if (!pre.TryGetValue(l, out var p)) return new Elaborato(l, null, null);
-            return new Elaborato(l, p, Classificatore.Classifica(l.Albero, conoscenza, p));
-        }).ToList();
+        foreach (var u in unita.Where(u => u.Pre is not null))
+            u.Classificazione = Classificatore.Classifica(u.Letto.Albero, conoscenza, u.Pre!);
+
+        // Una stringa riconosciuta come nome o segreto (EXECUTE AS USER = '...') non è SQL, anche se per caso si legge.
+        foreach (var u in unita.Where(u => u.Padre is not null))
+            u.Scartata = u.Padre!.Scartata || u.Padre.StringheReclamate().Contains(u.TokenNelPadre);
+        var attive = unita.Where(u => !u.Scartata).ToList();
 
         var liste = new Liste(profilo, mappa);
-        var infrastruttura = new AnalizzatoreInfrastruttura(mappa);
+        var infrastruttura = new Infra(new AnalizzatoreInfrastruttura(mappa),
+            new AnalizzatoreInfrastruttura(mappa, new OpzioniInfrastruttura(TestoLibero: true)));
 
         // Fase A: oggetti, colonne, variabili e alias, nell'ordine in cui compaiono.
-        foreach (var e in elaborati)
-            foreach (var nome in e.Nomi.Where(n => !RuoliComposti.Contains(n.Ruolo) && liste.DaAnonimizzare(n)))
-                e.Sostituzioni[nome.IndiceToken] =
-                    Riquota(NomeAnonimo(nome, mappa, conoscenza, liste, infrastruttura), nome, e.Letto.Token[nome.IndiceToken].Text);
+        foreach (var u in attive)
+            foreach (var nome in u.Nomi.Where(n => !RuoliComposti.Contains(n.Ruolo) && liste.DaAnonimizzare(n)))
+                u.Sostituzioni[nome.IndiceToken] =
+                    Riquota(NomeAnonimo(nome, mappa, conoscenza, liste, infrastruttura), nome, u.Letto.Token[nome.IndiceToken].Text);
 
         // Fase B: indici e constraint.
         var parti = PartiSostituibili(mappa);
-        foreach (var e in elaborati)
-            foreach (var nome in e.Nomi.Where(n => RuoliComposti.Contains(n.Ruolo) && !n.DiSistema))
+        foreach (var u in attive)
+            foreach (var nome in u.Nomi.Where(n => RuoliComposti.Contains(n.Ruolo) && !n.DiSistema))
             {
                 // Per intero se la blacklist o la matrice lo chiedono, o se le parti non si possono sostituire in modo
                 // pulito; altrimenti solo le parti che sono oggetti anonimizzati.
                 var nuovo = liste.DaAnonimizzare(nome) ? null : SostituisciParti(nome.Nome, parti);
                 nuovo ??= mappa.Ottieni(nome.Ruolo, nome.Nome);
                 if (nuovo != nome.Nome)
-                    e.Sostituzioni[nome.IndiceToken] = Riquota(nuovo, nome, e.Letto.Token[nome.IndiceToken].Text);
+                    u.Sostituzioni[nome.IndiceToken] = Riquota(nuovo, nome, u.Letto.Token[nome.IndiceToken].Text);
             }
 
-        // Fase C: percorsi, IP, host, email e URL dentro le stringhe. Dopo A e B, così i nomi di server e database
-        // già in mappa si riconoscono anche dentro un percorso (Vendite.bak → db_01.bak).
-        return new RisultatoAnonimizzazione([.. elaborati.Select(e => Ricomponi(e, mappa, infrastruttura))]);
+        // Fase C, dalle unità più interne alle più esterne: le figlie sono dopo le madri nella lista.
+        var dizionario = new SqlDinamico.Dizionario(mappa);
+        // Prima le stringhe di SQL dinamico, dalle più interne; poi gli script, nell'ordine in cui sono stati incollati
+        // (così anche i segnaposto dei commenti seguono quell'ordine).
+        for (var i = unita.Count - 1; i >= radici; i--)
+        {
+            var u = unita[i];
+            if (u.Scartata) continue;
+
+            var (testo, avvisi) = Ricomponi(u, mappa, infrastruttura, dizionario);
+
+            // Il SQL dinamico anonimizzato torna dentro la stringa della madre (senza il testo aggiunto per leggerlo).
+            if (testo is not null && testo.StartsWith(u.Prefisso, StringComparison.Ordinal) && testo.EndsWith(u.Suffisso, StringComparison.Ordinal))
+                u.Padre!.Figlie[u.TokenNelPadre] = testo[u.Prefisso.Length..^u.Suffisso.Length];
+
+            var riga = u.Padre!.Letto.Token[u.TokenNelPadre].Line;
+            u.Padre.AvvisiDelleFiglie.AddRange(avvisi.Select(a => new Avviso($"SQL dinamico: {a.Messaggio}", riga)));
+        }
+
+        var risultati = new List<ScriptAnonimizzato>();
+        for (var i = 0; i < radici; i++)
+        {
+            var (testo, avvisi) = Ricomponi(unita[i], mappa, infrastruttura, dizionario);
+            risultati.Add(new ScriptAnonimizzato(testo, avvisi));
+        }
+
+        return new RisultatoAnonimizzazione(risultati);
     }
 
-    private static ScriptAnonimizzato Ricomponi(Elaborato e, MappaCliente mappa, AnalizzatoreInfrastruttura infrastruttura)
+    private static (string? Testo, List<Avviso> Avvisi) Ricomponi(
+        Unita u, MappaCliente mappa, Infra infrastruttura, SqlDinamico.Dizionario dizionario)
     {
-        if (e.Pre is null)
+        if (u.Pre is null)
         {
             // La modalità di riserva (solo token) arriva nella tappa 10: per ora meglio non restituire nulla
             // che potrebbe contenere nomi in chiaro.
-            var primo = e.Letto.Errori[0];
-            return new ScriptAnonimizzato(null,
-                [new Avviso($"Script con errori di sintassi, non anonimizzato: {primo.Message}", primo.Line)]);
+            var primo = u.Letto.Errori[0];
+            return (null, [new Avviso($"Script con errori di sintassi, non anonimizzato: {primo.Message}", primo.Line)]);
         }
 
-        var testi = e.Letto.Token.Select(t => t.Text).ToArray();
-        foreach (var (indice, testo) in e.Sostituzioni) testi[indice] = testo;
+        var testi = u.Letto.Token.Select(t => t.Text).ToArray();
+        foreach (var (indice, testo) in u.Sostituzioni) testi[indice] = testo;
 
         // Password e SID: sempre cancellati, qualunque sia il profilo. Non passano dalla mappa e non vengono salvati.
-        foreach (var segreto in e.Classificazione!.Segreti)
-            testi[segreto.IndiceToken] = TestoSegnaposto(segreto, e.Letto.Token[segreto.IndiceToken].Text);
+        foreach (var segreto in u.Classificazione!.Segreti)
+            testi[segreto.IndiceToken] = TestoSegnaposto(segreto, u.Letto.Token[segreto.IndiceToken].Text);
 
-        var avvisi = new List<Avviso>(e.Avvisi);
-        var daSaltare = e.Sostituzioni.Keys.Concat(e.Classificazione.Segreti.Select(s => s.IndiceToken)).ToHashSet();
-        AnonimizzaStringhe(e.Letto, testi, daSaltare, infrastruttura, avvisi);
+        var avvisi = new List<Avviso>(u.Classificazione.Avvisi);
+        AnonimizzaStringhe(u, testi, infrastruttura, dizionario, avvisi);
+        avvisi.AddRange(u.AvvisiDelleFiglie);
 
         // Ultimo passo: i commenti diventano segnaposto (livello 5). Il testo originale resta nella mappa del cliente.
-        return new ScriptAnonimizzato(mappa.Commenti.Anonimizza(string.Concat(testi)), avvisi);
+        return (mappa.Commenti.Anonimizza(string.Concat(testi)), avvisi);
     }
 
     /// <summary>
-    /// Ogni letterale stringa che non è già stato trattato come nome o segreto passa dall'analizzatore
-    /// dell'infrastruttura: percorsi (<c>BACKUP ... TO DISK = '...'</c>), IP, host, email, URL, stringhe di connessione.
+    /// Le stringhe che non sono nomi né segreti:
+    /// <list type="bullet">
+    /// <item>SQL dinamico valido: al posto della stringa va quella già anonimizzata dall'unità figlia;</item>
+    /// <item>pezzi di SQL che non si possono leggere da soli (<c>' FROM '</c>, SQL costruito con <c>+</c>, SQL con errori):
+    /// si sostituiscono per dizionario i nomi già noti e si avvisa;</item>
+    /// <item>tutte: percorsi (<c>BACKUP ... TO DISK = '...'</c>), IP, host, email, URL, stringhe di connessione.</item>
+    /// </list>
     /// </summary>
     private static void AnonimizzaStringhe(
-        ScriptLetto letto, string[] testi, HashSet<int> daSaltare, AnalizzatoreInfrastruttura infrastruttura, List<Avviso> avvisi)
+        Unita u, string[] testi, Infra infrastruttura, SqlDinamico.Dizionario dizionario, List<Avviso> avvisi)
     {
-        for (var i = 0; i < letto.Token.Count; i++)
+        var daSaltare = u.Sostituzioni.Keys.Concat(u.Classificazione!.Segreti.Select(s => s.IndiceToken)).ToHashSet();
+        var comandi = u.Classificazione.Comandi.ToHashSet();
+
+        void Avvisa(string messaggio, int riga)
         {
-            var token = letto.Token[i];
+            var avviso = new Avviso(messaggio, riga);
+            if (!avvisi.Contains(avviso)) avvisi.Add(avviso);
+        }
+
+        for (var i = 0; i < u.Letto.Token.Count; i++)
+        {
+            var token = u.Letto.Token[i];
             if (token.TokenType is not (TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral)
                 || daSaltare.Contains(i))
                 continue;
+            if (SqlDinamico.Spacchetta(testi[i]) is not { } stringa) continue;
 
-            var testoToken = testi[i];
-            var prefisso = testoToken.StartsWith('N') || testoToken.StartsWith('n') ? testoToken[..1] : "";
-            if (testoToken.Length < prefisso.Length + 2 || !testoToken.EndsWith('\'')) continue;
+            if (u.Figlie.TryGetValue(i, out var figlia))
+            {
+                testi[i] = SqlDinamico.Ricompatta(stringa.Prefisso, figlia);
+                continue;
+            }
 
-            var contenuto = testoToken[(prefisso.Length + 1)..^1].Replace("''", "'");
-            var esito = infrastruttura.Anonimizza(contenuto);
-            avvisi.AddRange(esito.Avvisi.Select(a => new Avviso(a, token.Line)));
-            if (!esito.Testo.Equals(contenuto, StringComparison.Ordinal))
-                testi[i] = prefisso + "'" + esito.Testo.Replace("'", "''") + "'";
+            var contenuto = stringa.Contenuto;
+            if (SqlDinamico.InizioFrammento(contenuto))
+            {
+                contenuto = dizionario.Sostituisci(contenuto);
+                Avvisa("SQL dinamico costruito a pezzi o con errori di sintassi: ho sostituito per dizionario i nomi già noti; " +
+                       "controlla che non ne restino altri (per esempio quelli aggiunti con una variabile).", token.Line);
+            }
+            else if (SqlDinamico.EUnNomeOggetto(contenuto))
+            {
+                // OBJECT_ID('dbo.Ordini'), @tabella = N'Ordini': una stringa che è solo il nome di un oggetto già noto.
+                contenuto = dizionario.Sostituisci(contenuto);
+            }
+
+            // Una riga di comando (xp_cmdshell, passo di job CmdExec) è testo libero: uno spazio chiude il percorso.
+            var analizzatore = comandi.Contains(i) ? infrastruttura.TestoLibero : infrastruttura.Letterali;
+            var esito = analizzatore.Anonimizza(contenuto);
+            foreach (var a in esito.Avvisi) Avvisa(a, token.Line);
+            if (!esito.Testo.Equals(stringa.Contenuto, StringComparison.Ordinal))
+                testi[i] = SqlDinamico.Ricompatta(stringa.Prefisso, esito.Testo);
         }
     }
+
+    /// <summary>I due modi di leggere una stringa: come contenuto di un letterale (un percorso può avere spazi) o come testo libero.</summary>
+    private sealed record Infra(AnalizzatoreInfrastruttura Letterali, AnalizzatoreInfrastruttura TestoLibero);
 
     /// <summary>
     /// La decisione per ogni nome, in quest'ordine: oggetto di sistema → in chiaro; blacklist → anonimizzato (vince
@@ -268,10 +368,10 @@ public static class AnonimizzatoreScript
     /// <c>dom_01</c>, l'utente un <c>usr_007</c> (<c>dom_01\usr_007</c>).
     /// </summary>
     private static string NomeAnonimo(
-        NomeTrovato nome, MappaCliente mappa, Conoscenza conoscenza, Liste liste, AnalizzatoreInfrastruttura infrastruttura)
+        NomeTrovato nome, MappaCliente mappa, Conoscenza conoscenza, Liste liste, Infra infrastruttura)
     {
         // Un server scritto come testo (@datasrc = 'SRVSQL02\ISTANZA1'): host e istanza come in una stringa di connessione.
-        if (nome.Ruolo == Ruolo.Server && nome.DaStringa) return infrastruttura.AnonimizzaServer(nome.Nome);
+        if (nome.Ruolo == Ruolo.Server && nome.DaStringa) return infrastruttura.Letterali.AnonimizzaServer(nome.Nome);
 
         var barra = nome.Nome.IndexOf('\\');
         if (nome.Ruolo is Ruolo.Login or Ruolo.Utente && barra > 0 && barra < nome.Nome.Length - 1)

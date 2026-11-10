@@ -141,6 +141,14 @@ public static class ListeBase
         "NT AUTHORITY", "NT SERVICE", "BUILTIN", "NT VIRTUAL MACHINE", "Window Manager", "Font Driver Host",
     };
 
+    /// <summary>Il server locale, comunque sia scritto (<c>(local)</c>, <c>.</c>, <c>localhost</c>): non rivela nulla.</summary>
+    public static bool ServerLocale(string server)
+    {
+        var s = server.Trim();
+        return s == "." || s.Equals("(local)", StringComparison.OrdinalIgnoreCase)
+               || s.Equals("localhost", StringComparison.OrdinalIgnoreCase) || s.Equals("(localdb)", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Vero se il dominio è quello degli account Windows di sistema (<c>NT AUTHORITY</c>, <c>BUILTIN</c>...).</summary>
     public static bool DominioDiSistema(string dominio) => DominiSistema.Contains(NomeSql.Normalizza(dominio));
 

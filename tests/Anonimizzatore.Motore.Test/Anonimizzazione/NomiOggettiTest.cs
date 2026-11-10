@@ -78,7 +78,7 @@ public class NomiOggettiTest
     [InlineData("SELECT * FROM sysobjects;")]
     [InlineData("EXEC sp_executesql @sql;")]
     [InlineData("EXEC master.dbo.xp_cmdshell 'dir';")]
-    [InlineData("EXEC msdb.dbo.sp_add_job @job_name = 'x';")]
+    [InlineData("EXEC msdb.dbo.sp_add_operator @name = 'x';")]
     [InlineData("SELECT * FROM tempdb.sys.tables;")]
     [InlineData("USE master;")]
     [InlineData("SELECT * FROM sys.dm_exec_requests;")]

@@ -160,6 +160,12 @@ public sealed partial class DeAnonimizzatore
             && m.Index + m.Length < testo.Length && testo[m.Index + m.Length] == '"';
         if (traApici) return r.Testo;
 
+        // Il nome è tutta una stringa ('job_001', N'srv_01'): è un valore, non un identificatore, quindi niente
+        // parentesi quadre (che finirebbero dentro la stringa); gli apici dentro il nome si raddoppiano.
+        var traApiciSingoli = m.Index > 0 && testo[m.Index - 1] == '\''
+            && m.Index + m.Length < testo.Length && testo[m.Index + m.Length] == '\'';
+        if (traApiciSingoli) return r.Testo.Replace("'", "''");
+
         var daQuotare = r.CopreTutto
             ? DaQuotare(r.Sostituite[0])
             : r.Sostituite.Any(v => !SoloCaratteri(v));

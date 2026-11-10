@@ -109,9 +109,9 @@ public class ColonneVariabiliTest
     [Fact]
     public void I_parametri_delle_procedure_di_sistema_non_si_toccano_nemmeno_con_la_blacklist()
     {
-        var sql = "EXEC msdb.dbo.sp_add_job @job_name = N'x', @enabled = 1;";
+        var sql = "EXEC msdb.dbo.sp_add_operator @name = N'x', @enabled = 1;";
 
-        Assert.Equal(sql, Anon(sql, profilo: NuovoProfilo("job", "enabled", "name")));
+        Assert.Equal(sql, Anon(sql, profilo: NuovoProfilo("operator", "enabled", "name")));
     }
 
     [Fact]

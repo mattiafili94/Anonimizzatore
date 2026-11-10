@@ -14,6 +14,8 @@ internal enum ArgSicurezza
     Host,
     Password,
     Sid,
+    /// <summary>Il nome di un job di SQL Agent.</summary>
+    Job,
 }
 
 /// <summary>
@@ -51,6 +53,28 @@ internal static class ProcedureSicurezza
         ["sp_addlinkedsrvlogin"] = [("@rmtsrvname", ArgSicurezza.ServerCollegato), ("@useself", null),
             ("@locallogin", ArgSicurezza.Login), ("@rmtuser", ArgSicurezza.Login), ("@rmtpassword", ArgSicurezza.Password)],
         ["sp_droplinkedsrvlogin"] = [("@rmtsrvname", ArgSicurezza.ServerCollegato), ("@locallogin", ArgSicurezza.Login)],
+
+        // Job di SQL Agent. Il @command di sp_add_jobstep è T-SQL (SQL dinamico) o una riga di comando: lo trattano le
+        // stringhe; i nomi dei passi (@step_name) e le descrizioni sono testo libero.
+        ["sp_add_job"] = [("@job_name", ArgSicurezza.Job), ("@enabled", null), ("@description", null), ("@start_step_id", null),
+            ("@category_name", null), ("@category_id", null), ("@owner_login_name", ArgSicurezza.Login)],
+        ["sp_update_job"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job), ("@new_name", ArgSicurezza.Job), ("@enabled", null),
+            ("@description", null), ("@start_step_id", null), ("@category_name", null), ("@owner_login_name", ArgSicurezza.Login)],
+        ["sp_delete_job"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job)],
+        ["sp_start_job"] = [("@job_name", ArgSicurezza.Job), ("@job_id", null), ("@error_flag", null), ("@server_name", ArgSicurezza.Host)],
+        ["sp_stop_job"] = [("@job_name", ArgSicurezza.Job)],
+        ["sp_add_jobstep"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job), ("@step_id", null), ("@step_name", null),
+            ("@subsystem", null), ("@command", null), ("@additional_parameters", null), ("@cmdexec_success_code", null),
+            ("@on_success_action", null), ("@on_success_step_id", null), ("@on_fail_action", null), ("@on_fail_step_id", null),
+            ("@server", ArgSicurezza.Host), ("@database_name", ArgSicurezza.Database), ("@database_user_name", ArgSicurezza.Utente)],
+        ["sp_update_jobstep"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job), ("@step_id", null), ("@step_name", null),
+            ("@subsystem", null), ("@command", null), ("@additional_parameters", null), ("@cmdexec_success_code", null),
+            ("@on_success_action", null), ("@on_success_step_id", null), ("@on_fail_action", null), ("@on_fail_step_id", null),
+            ("@server", ArgSicurezza.Host), ("@database_name", ArgSicurezza.Database), ("@database_user_name", ArgSicurezza.Utente)],
+        ["sp_add_jobserver"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job), ("@server_name", ArgSicurezza.Host)],
+        ["sp_delete_jobserver"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job), ("@server_name", ArgSicurezza.Host)],
+        ["sp_add_jobschedule"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job)],
+        ["sp_attach_schedule"] = [("@job_id", null), ("@job_name", ArgSicurezza.Job)],
     };
 
     public static IReadOnlyList<(string Nome, ArgSicurezza? Tipo)>? Firma(string procedura) =>

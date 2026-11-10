@@ -31,8 +31,10 @@ public enum TipoSegreto
 public sealed record Segreto(int IndiceToken, TipoSegreto Tipo);
 
 /// <summary>Tutto ciò che il classificatore trova in uno script.</summary>
+/// <param name="Comandi">Posizioni delle stringhe che sono righe di comando (<c>xp_cmdshell</c>, passi di job CmdExec): vanno
+/// lette come testo libero, dove uno spazio chiude un percorso e <c>/E</c> è un'opzione, non una cartella.</param>
 public sealed record RisultatoClassificazione(
-    IReadOnlyList<NomeTrovato> Nomi, IReadOnlyList<Avviso> Avvisi, IReadOnlyList<Segreto> Segreti);
+    IReadOnlyList<NomeTrovato> Nomi, IReadOnlyList<Avviso> Avvisi, IReadOnlyList<Segreto> Segreti, IReadOnlyList<int> Comandi);
 
 /// <summary>
 /// Passo 2 del motore: percorre l'albero sintattico e dà un <see cref="Ruolo"/> a ogni nome: oggetti (server,
@@ -51,6 +53,7 @@ public sealed class Classificatore : TSqlFragmentVisitor
     private readonly HashSet<VariableReference> _variabiliDiSistema = [];
     private readonly List<Avviso> _avvisi = [];
     private readonly Dictionary<int, Segreto> _segreti = [];
+    private readonly HashSet<int> _comandi = [];
     private Ruolo _ruoloNomeOpzione = Ruolo.Utente; // login o utente di cui si stanno leggendo le opzioni (WITH NAME = ...)
 
     private Classificatore(Conoscenza conoscenza, PreAnalisi pre)
@@ -65,7 +68,8 @@ public sealed class Classificatore : TSqlFragmentVisitor
         var c = new Classificatore(conoscenza, pre);
         albero.Accept(c);
         return new RisultatoClassificazione(
-            [.. c._trovati.Values.OrderBy(n => n.IndiceToken)], c._avvisi, [.. c._segreti.Values.OrderBy(s => s.IndiceToken)]);
+            [.. c._trovati.Values.OrderBy(n => n.IndiceToken)], c._avvisi, [.. c._segreti.Values.OrderBy(s => s.IndiceToken)],
+            [.. c._comandi.Order()]);
     }
 
     /// <summary>Le variabili si chiamano sempre con la @ davanti, comunque le restituisca ScriptDom.</summary>
@@ -254,7 +258,8 @@ public sealed class Classificatore : TSqlFragmentVisitor
             // --- tipi di dato: non sono oggetti del cliente ---
             case UserDataTypeReference n:
                 _ignorati.Add(n.Name);
-                _avvisi.Add(new Avviso($"Tipo definito dall'utente '{n.Name.BaseIdentifier.Value}' lasciato in chiaro.", n.StartLine));
+                if (!n.Name.BaseIdentifier.Value.Equals("sysname", StringComparison.OrdinalIgnoreCase)) // sysname è di sistema
+                    _avvisi.Add(new Avviso($"Tipo definito dall'utente '{n.Name.BaseIdentifier.Value}' lasciato in chiaro.", n.StartLine));
                 break;
             case DataTypeReference n when n.Name is not null:
                 _ignorati.Add(n.Name);
@@ -295,11 +300,48 @@ public sealed class Classificatore : TSqlFragmentVisitor
             return;
 
         // I parametri con nome di una procedura di sistema (@job_name = ...) sono di SQL Server, non del cliente.
+        // Fa eccezione sp_executesql: @stmt e @params sono suoi, ma gli altri (@p = 1) sono i parametri del SQL
+        // dinamico e hanno lo stesso nome delle variabili dentro la stringa.
+        var eSpExecuteSql = id.Value.Equals("sp_executesql", StringComparison.OrdinalIgnoreCase);
         foreach (var p in chiamata.Parameters.Where(p => p.Variable is not null))
-            _variabiliDiSistema.Add(p.Variable);
+            if (!eSpExecuteSql || p.Variable.Name is "@stmt" or "@params")
+                _variabiliDiSistema.Add(p.Variable);
 
         // Le procedure di sistema per login, utenti e ruoli ricevono nomi e password come stringhe.
         if (ProcedureSicurezza.Firma(id.Value) is { } firma) ArgomentiSicurezza(chiamata, firma);
+
+        SegnaComandi(chiamata, id.Value);
+    }
+
+    /// <summary>Le stringhe che sono righe di comando: <c>xp_cmdshell '...'</c> e il <c>@command</c> di un passo di job non T-SQL.</summary>
+    private void SegnaComandi(ExecutableProcedureReference chiamata, string procedura)
+    {
+        if (procedura.Equals("xp_cmdshell", StringComparison.OrdinalIgnoreCase))
+        {
+            SegnaComando(ValoreParametro(chiamata, "@command_string", 0));
+        }
+        else if (procedura.Equals("sp_add_jobstep", StringComparison.OrdinalIgnoreCase)
+                 || procedura.Equals("sp_update_jobstep", StringComparison.OrdinalIgnoreCase))
+        {
+            // Senza @subsystem il passo è T-SQL; CmdExec, PowerShell... sono righe di comando.
+            if (ValoreParametro(chiamata, "@subsystem", 4) is StringLiteral sottosistema
+                && !sottosistema.Value.Equals("TSQL", StringComparison.OrdinalIgnoreCase))
+                SegnaComando(ValoreParametro(chiamata, "@command", 5));
+        }
+    }
+
+    private static ScalarExpression? ValoreParametro(ExecutableProcedureReference chiamata, string nome, int posizione)
+    {
+        var conNome = chiamata.Parameters.FirstOrDefault(p => p.Variable?.Name.Equals(nome, StringComparison.OrdinalIgnoreCase) == true);
+        if (conNome is not null) return conNome.ParameterValue;
+        return posizione < chiamata.Parameters.Count && chiamata.Parameters[posizione].Variable is null
+            ? chiamata.Parameters[posizione].ParameterValue
+            : null;
+    }
+
+    private void SegnaComando(ScalarExpression? valore)
+    {
+        if (valore is StringLiteral { FirstTokenIndex: >= 0 } s) _comandi.Add(s.FirstTokenIndex);
     }
 
     private void ArgomentiSicurezza(ExecutableProcedureReference chiamata, IReadOnlyList<(string Nome, ArgSicurezza? Tipo)> firma)
@@ -320,7 +362,8 @@ public sealed class Classificatore : TSqlFragmentVisitor
                 case ArgSicurezza.Principale: PrincipaleInStringa(valore); break;
                 case ArgSicurezza.Database: Stringa(valore, Ruolo.Database, ListeBase.DatabaseDiSistema(valore.Value)); break;
                 case ArgSicurezza.ServerCollegato: Stringa(valore, Ruolo.LinkedServer, false); break;
-                case ArgSicurezza.Host: Stringa(valore, Ruolo.Server, false); break;
+                case ArgSicurezza.Host: Stringa(valore, Ruolo.Server, ListeBase.ServerLocale(valore.Value)); break;
+                case ArgSicurezza.Job: Stringa(valore, Ruolo.Job, false); break;
                 case ArgSicurezza.Password: NascondiSegreto(valore, TipoSegreto.Password); break;
                 case ArgSicurezza.Sid: NascondiSegreto(valore, TipoSegreto.Sid); break;
             }

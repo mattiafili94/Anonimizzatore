@@ -63,13 +63,13 @@ public class WhitelistBlacklistTest
         var anon = Anon("""
             USE Report;
             SELECT * FROM Report.dbo.Storico;
-            EXEC msdb.dbo.sp_add_job @job_name = N'x';
+            EXEC msdb.dbo.sp_add_operator @name = N'x';
             """);
 
         Assert.Equal("""
             USE Report;
             SELECT * FROM Report.dbo.Storico;
-            EXEC msdb.dbo.sp_add_job @job_name = N'x';
+            EXEC msdb.dbo.sp_add_operator @name = N'x';
             """, anon);
     }
 
