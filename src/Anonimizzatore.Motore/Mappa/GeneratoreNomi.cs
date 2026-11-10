@@ -26,6 +26,7 @@ public static class GeneratoreNomi
             Ruolo.Variabile => $"@v_{tipo}_{n}",
             Ruolo.Parametro => $"@p_{tipo}_{n}",
             Ruolo.Temporanea => (nomeOriginale?.StartsWith("##") == true ? "##" : "#") + $"tmp_{n}",
+            Ruolo.Email => $"mail_{n}@example.invalid",
             _ => $"{famiglia}_{n}",
         };
     }
