@@ -340,14 +340,15 @@ public class NomiOggettiTest
     }
 
     [Fact]
-    public void Script_con_errori_non_viene_restituito_e_ha_un_avviso()
+    public void Script_con_errori_va_in_modalita_di_riserva_con_un_avviso()
     {
+        // "FORM" è un errore di battitura: lo script non si legge, ma "Ordini" è un nome già noto dall'altro script.
         var esito = AnonimizzatoreScript
             .Anonimizza(["SELECT * FORM dbo.Ordini WHERE", "SELECT * FROM dbo.Ordini;"], NuovoProfilo(), new MappaCliente());
 
-        Assert.False(esito.Script[0].Anonimizzato);
-        Assert.Null(esito.Script[0].Testo);
-        Assert.NotEmpty(esito.Script[0].Avvisi);
+        Assert.True(esito.Script[0].Anonimizzato);
+        Assert.Equal("SELECT * FORM dbo.tbl_001 WHERE", esito.Script[0].Testo);
+        Assert.Contains("modalità di riserva", Assert.Single(esito.Script[0].Avvisi).Messaggio);
         Assert.Equal("SELECT * FROM dbo.tbl_001;", esito.Script[1].Testo); // l'altro script va avanti
     }
 

@@ -20,7 +20,9 @@ public static class LettoreScript
         {
             using var lettore = new StringReader(testo);
             var albero = parser.Parse(lettore, out IList<ParseError> errori);
-            return new ScriptLetto(testo, albero, albero.ScriptTokenStream, errori);
+            // Se il lessico fallisce (per esempio con "D:\script.sql" in una riga :r) ScriptDom non dà i token:
+            // si riprova con il solo lessico; in ogni caso la lista c'è sempre.
+            return new ScriptLetto(testo, albero ?? new TSqlScript(), albero?.ScriptTokenStream ?? TokenOVuoti(testo), errori);
         }
         catch (Exception eccezione) when (eccezione is not OutOfMemoryException)
         {
@@ -36,7 +38,7 @@ public static class LettoreScript
         try
         {
             using var lettore = new StringReader(testo);
-            return new TSql170Parser(initialQuotedIdentifiers: true).GetTokenStream(lettore, out _);
+            return new TSql170Parser(initialQuotedIdentifiers: true).GetTokenStream(lettore, out _) ?? [];
         }
         catch (Exception)
         {

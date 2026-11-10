@@ -165,13 +165,13 @@ public sealed class CommentiTest : IDisposable
     }
 
     [Fact]
-    public void Script_con_errori_non_consuma_numeri_di_commento()
+    public void Anche_uno_script_con_errori_ha_i_commenti_sostituiti()
     {
         var mappa = new MappaCliente();
         var esito = AnonimizzatoreScript.Anonimizza(
             ["SELECT * FORM -- rotto", "SELECT 1; -- buono"], NuovoProfilo(), mappa);
 
-        Assert.Null(esito.Script[0].Testo);
-        Assert.Equal("SELECT 1; /* c001 */", esito.Script[1].Testo);
+        Assert.Equal("SELECT * FORM /* c001 */", esito.Script[0].Testo);
+        Assert.Equal("SELECT 1; /* c002 */", esito.Script[1].Testo);
     }
 }

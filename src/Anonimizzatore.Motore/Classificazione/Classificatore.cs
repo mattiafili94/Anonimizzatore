@@ -435,7 +435,8 @@ public sealed class Classificatore : TSqlFragmentVisitor
 
     private void Stringa(Literal? letterale, Ruolo ruolo, bool sistema)
     {
-        if (letterale is not StringLiteral { FirstTokenIndex: >= 0 } s || s.Value.Length == 0) return;
+        if (letterale is not StringLiteral { FirstTokenIndex: >= 0 } s || s.Value.Length == 0
+            || s.Value.Contains("$(", StringComparison.Ordinal)) return;
         _trovati.TryAdd(s.FirstTokenIndex,
             new NomeTrovato(s.FirstTokenIndex, ruolo, s.Value, QuoteType.NotQuoted, sistema, DaStringa: true));
     }
@@ -597,6 +598,7 @@ public sealed class Classificatore : TSqlFragmentVisitor
     private void Aggiungi(Identifier? id, Ruolo ruolo, bool sistema)
     {
         if (id is null || id.FirstTokenIndex < 0) return;
+        if (id.Value.Contains("$(", StringComparison.Ordinal)) return; // variabile SQLCMD: il nome vero è nella riga :setvar
         _trovati.TryAdd(id.FirstTokenIndex, new NomeTrovato(id.FirstTokenIndex, ruolo, id.Value, id.QuoteType, sistema));
     }
 

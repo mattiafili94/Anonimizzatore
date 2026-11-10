@@ -162,9 +162,37 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     (il ripristino non può sapere che dopo c'è la fine della stringa); i pezzi di SQL che non iniziano con una parola
     chiave (`'.dbo.'`, `'[dbo].['`) e i nomi che arrivano da variabili non si riconoscono (avviso); i numeri dei
     segnaposto dei commenti seguono prima il SQL dinamico poi gli script.
-- **Prossimo passo**: tappa 10 (SQLCMD e modalità di riserva: righe `:setvar`/`:connect`, `GO` con conteggio; script con
-  errori di sintassi → solo token + dizionario, con avviso, invece di non restituire nulla). Poi 11 (legenda e testo unico da
-  copiare), 12 (de-anonimizzazione: rifinire, report), 13 (controllo anti-fuga).
+- **Tappa 10 fatta** (10/11/2026): SQLCMD e modalità di riserva, 494 test verdi. Novità:
+  - **SQLCMD** (`Sqlcmd.Dividi`, `AnonimizzatoreScript.Sqlcmd.cs`): le righe `:setvar`, `:connect`, `:r`, `:out`, `:error`, `:ed`,
+    `:on`, `:quit`, `:exit`, `!!` e `GO n` si separano dal T-SQL (non dentro un commento `/* */`); ogni blocco di T-SQL tra
+    due righe SQLCMD è una unità a sé (un blocco rotto non rovina gli altri; le righe degli avvisi si riportano allo script).
+    Le righe SQLCMD si elaborano **dopo** i blocchi di T-SQL (così i nomi già noti si riconoscono):
+    - `:setvar NOME valore`: il **nome della variabile** dice cosa contiene: `pass|pwd|secret` → `<password>`;
+      `path|dir|folder|cartella|percorso|file` → percorso; `database|dbname|db|catalog` → `Database`;
+      `server|srv|instance|istanza|host|node` → `Server`; `schema`; `user|login|utente|account|owner` → `Login`
+      (`DOM\x` si spezza); `job`; altrimenti percorsi/IP/email e poi nomi già noti. Sistema, matrice, blacklist e whitelist
+      valgono come per gli script. Un valore con `$(...)` non si tocca;
+    - `:connect server -U utente -P password`, `:r|:out|:error|:ed file` (percorso, oppure solo nome di file → `file_NNN`
+      con la sua estensione), `!!comando`;
+    - **opzioni di `sqlcmd`/`osql`/`bcp`** (`-S` server, `-U` utente, `-P` password cancellata, `-d` database, `-Q` query, `-i/-o`
+      file) anche dentro `xp_cmdshell`, passi di job CmdExec e `:connect`/`!!`;
+    - le variabili `$(Db)` nei nomi (`[$(Db)].dbo.Ordini`, anche senza parentesi) non si toccano: il valore sta nel `:setvar`;
+  - **modalità di riserva** (`ModalitaRiserva`): un blocco con errori di sintassi non si scarta più, si leggono i token. Si
+    sostituiscono: il nome dopo `FROM/JOIN/INTO/UPDATE/TABLE/MERGE/REFERENCES` (tabella), `VIEW`, `PROCEDURE/PROC/EXEC/EXECUTE`,
+    `FUNCTION`, `TRIGGER`, `SCHEMA`, `DATABASE/USE` (con schema, database e server davanti), i nomi già in mappa (da altri
+    blocchi o da sessioni precedenti), le parole della blacklist (colonne/variabili) e `PASSWORD = '...'` / `SID = 0x...`.
+    Il resto (colonne mai viste, alias) resta in chiaro. Stesse regole di decisione, commenti e stringhe degli script validi.
+    Avviso sempre presente, con la riga e il messaggio dell'errore. Classificati **dopo** i blocchi validi (serve la mappa);
+  - uno script resta `null` solo se non si legge nemmeno un token. `LettoreScript` garantisce sempre la lista dei token
+    (prima, con un errore del lessico come in `:r D:\x.sql`, restava `null`).
+  - **Limiti noti**: in modalità di riserva un'espressione come `Ordini.Id` si riconosce solo se `Ordini` è già in mappa; le
+    righe SQLCMD dentro una stringa su più righe o un commento non `/* */` (es. `--`) sono lette come SQLCMD solo se
+    iniziano la riga; `:setvar` con nome non riconoscibile e valore sconosciuto resta in chiaro (si vede dal dizionario solo
+    dopo che il nome è comparso altrove).
+- **Prossimo passo**: tappa 11 (legenda e testo unico da copiare: convenzione dei nomi per l'IA, schema anonimizzato allegato se
+  c'è lo schema importato, script separati da `-- Script 1`, `-- Script 2`...). Poi 12 (de-anonimizzazione: report completo) e
+  13 (controllo anti-fuga: nomi originali e blacklist nell'output + nuova lettura di validità; testi liberi, descrizioni dei
+  job, `NAME` dei backup).
 
 ## Regole fisse (repo pubblica)
 
@@ -297,8 +325,9 @@ Matrice configurabile per cliente: per ogni tipo di oggetto "anonimizza" oppure 
 - **Alias**: in chiaro, salvo parole in blacklist.
 - **Oggetti di sistema**: lista fissa (built-in, `sp_*`/`xp_*` di sistema, DB di sistema, `sys`, `INFORMATION_SCHEMA`,
   DMV).
-- **GO / SQLCMD**: batch gestiti da ScriptDom; righe `:setvar`/`:connect` trattate a parte.
-- **Script con errori**: modalità di riserva solo sui token, con avviso.
+- **GO / SQLCMD**: `GO` semplice lo gestisce ScriptDom; `GO 5` (con conteggio) e le righe `:setvar`/`:connect`/`:r`/`!!` sono
+  errori di sintassi per ScriptDom e si trattano a parte (vedi tappa 10).
+- **Script con errori**: modalità di riserva solo sui token, con avviso (fatto, tappa 10).
 - **Sicurezza**: `[DOMINIO\utente]` → `[dom_01\usr_007]`; password e SID sostituiti da un segnaposto e **non salvati**
   nella mappa.
 - **Percorsi/infrastruttura nelle stringhe**: UNC, percorsi locali, IP, host, email, URL; struttura ed estensione
