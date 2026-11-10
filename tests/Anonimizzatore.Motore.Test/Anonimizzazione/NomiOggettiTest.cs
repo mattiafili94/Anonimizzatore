@@ -145,12 +145,12 @@ public class NomiOggettiTest
         var anon = Anon("""
             CREATE FUNCTION dbo.fnSconto(@x int) RETURNS int AS BEGIN RETURN @x; END;
             GO
-            CREATE PROCEDURE dbo.uspCalcola AS
+            CREATE PROCEDURE dbo.uspSomma AS
             BEGIN
                 SELECT dbo.fnSconto(5), GETDATE();
-                SELECT * FROM dbo.fnElenco(1) AS e;
+                SELECT * FROM dbo.fnMovimenti(1) AS e;
                 EXEC dbo.uspAltra;
-                EXECUTE [uspCalcola];
+                EXECUTE [uspSomma];
             END;
             GO
             CREATE TRIGGER dbo.trgOrdini ON dbo.Ordini AFTER INSERT AS
@@ -173,11 +173,11 @@ public class NomiOggettiTest
     public void Insert_update_delete_merge_drop_e_select_into()
     {
         var anon = Anon("""
-            INSERT INTO dbo.Ordini (IdOrdine) SELECT IdOrdine FROM dbo.Storico;
+            INSERT INTO dbo.Ordini (IdOrdine) SELECT IdOrdine FROM dbo.Spedizioni;
             UPDATE o SET Importo = 0 FROM dbo.Ordini AS o;
-            DELETE FROM dbo.Storico WHERE IdOrdine = 1;
+            DELETE FROM dbo.Spedizioni WHERE IdOrdine = 1;
             SELECT * INTO dbo.Copia FROM dbo.Ordini;
-            MERGE dbo.Ordini AS t USING dbo.Storico AS s ON t.IdOrdine = s.IdOrdine WHEN MATCHED THEN DELETE;
+            MERGE dbo.Ordini AS t USING dbo.Spedizioni AS s ON t.IdOrdine = s.IdOrdine WHEN MATCHED THEN DELETE;
             TRUNCATE TABLE dbo.Copia;
             DROP TABLE dbo.Copia;
             DROP VIEW IF EXISTS dbo.vTest;

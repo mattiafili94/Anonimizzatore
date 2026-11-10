@@ -150,7 +150,7 @@ public class ColonneVariabiliTest
         profilo.Matrice[Ruolo.Parametro] = Trattamento.Anonimizza;
 
         var anon = Anon("""
-            CREATE PROCEDURE dbo.uspX @Codice varchar(20) AS SELECT Nome FROM dbo.T WHERE Codice = @Codice;
+            CREATE PROCEDURE dbo.uspX @Sigla varchar(20) AS SELECT Cognome FROM dbo.T WHERE Matricola = @Sigla;
             """, profilo: profilo);
 
         Assert.Equal("CREATE PROCEDURE dbo.usp_001 @p_vc20_001 varchar(20) AS SELECT col_x_001 FROM dbo.tbl_001 WHERE col_x_002 = @p_vc20_001;", anon);

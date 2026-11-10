@@ -90,6 +90,35 @@ public static class ListeBase
         "Parse", "Lat", "Long", "Z", "M", "Point", "Reduce",
     };
 
+    /// <summary>
+    /// Whitelist base: parole generiche, tecniche o di uso comune che non rivelano nulla del cliente. Un nome le cui
+    /// parole sono <b>tutte</b> generiche (<c>usp_GetData</c>, <c>LogStorico</c>) resta in chiaro: all'IA dice cosa fa.
+    /// Parole di dominio (clienti, ordini, fatture...) non ci sono: stanno in chiaro solo se le aggiunge il cliente.
+    /// </summary>
+    public static IReadOnlySet<string> ParoleGeneriche { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        // sigle tecniche e prefissi di convenzione
+        "usp", "sp", "xp", "fn", "ufn", "vw", "tbl", "tb", "trg", "tr", "pk", "fk", "ix", "idx", "ux", "df", "ck", "uq", "tmp", "temp",
+        // verbi e azioni
+        "get", "set", "ins", "insert", "upd", "update", "del", "delete", "sel", "select", "merge", "list", "load", "save",
+        "check", "calc", "calcola", "carica", "salva", "aggiorna", "elimina", "inserisci", "leggi", "crea", "create",
+        "drop", "add", "remove", "export", "import", "sync", "run", "exec", "process", "genera", "verifica", "controlla",
+        // preposizioni e congiunzioni
+        "by", "for", "from", "to", "and", "or", "of", "in", "on", "per", "con", "da", "di", "del", "e", "il", "la", "le", "lo",
+        // nomi generici (italiano e inglese)
+        "id", "ids", "key", "data", "dati", "date", "time", "ora", "anno", "year", "mese", "month", "giorno", "day",
+        "codice", "code", "cod", "stato", "status", "tipo", "type", "tipologia", "descrizione", "description", "desc",
+        "nome", "name", "note", "notes", "numero", "number", "num", "nr", "valore", "value", "importo", "amount", "totale",
+        "total", "quantita", "qty", "count", "flag", "attivo", "active", "enabled", "default", "progressivo",
+        "log", "logs", "storico", "history", "archivio", "archive", "elenco", "lista", "dettaglio", "dettagli", "detail",
+        "details", "testata", "header", "report", "reports", "stampa", "print", "errore", "errori", "error", "errors",
+        "parametri", "parametro", "param", "params", "parameters", "config", "configurazione", "settings", "impostazioni",
+        "utente", "utenti", "user", "users", "ruolo", "ruoli", "role", "roles", "permessi", "permissions",
+        "test", "prova", "demo", "sample", "esempio", "backup", "restore", "job", "batch", "task", "queue", "coda",
+        "master", "info", "main", "base", "new", "old", "nuovo", "vecchio", "ultimo", "last", "first", "primo",
+        "min", "max", "sum", "avg", "tot", "row", "rows", "col", "cols", "table", "view", "proc", "func", "all", "tutti",
+    };
+
     /// <summary>Schema che restano in chiaro: <c>dbo</c>, <c>sys</c>, <c>INFORMATION_SCHEMA</c>, <c>guest</c>.</summary>
     public static bool SchemaPredefinito(string schema) => SchemiPredefiniti.Contains(NomeSql.Normalizza(schema));
 

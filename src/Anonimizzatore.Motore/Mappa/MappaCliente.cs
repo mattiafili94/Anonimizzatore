@@ -66,6 +66,10 @@ public sealed partial class MappaCliente
         return candidato;
     }
 
+    /// <summary>Vero se questo nome ha già un nome anonimo (assegnato in questa sessione o nelle precedenti).</summary>
+    public bool Contiene(Ruolo ruolo, string nomeOriginale) =>
+        _perOriginale.ContainsKey($"{FamigliaRuolo.Di(ruolo)}|{NomeSql.Normalizza(nomeOriginale)}");
+
     /// <summary>
     /// Cerca la voce di un nome anonimo (case-insensitive, con o senza parentesi).
     /// Per colonne e variabili basta il numero: <c>col_int_012</c> trova <c>col_vc50_012</c> anche se l'IA ha

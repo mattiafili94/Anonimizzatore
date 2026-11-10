@@ -60,9 +60,22 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   - le prove di andata e ritorno usano il vero `DeAnonimizzatore` (aggiunto il prefisso `al_`).
   - Scelta: una colonna che ha per caso lo stesso nome di una tabella (`... AS Righe`) resta in chiaro, come tutte le
     colonne.
-- **Prossimo passo**: tappa 5 (rimane la **whitelist**, per nome intero e per parole, con la lista base di parole
-  generiche; la blacklist per parole c'è già dalla tappa 4). Poi 6-13 (aggancio di commenti, sicurezza, stringhe e
-  SQL dinamico, SQLCMD/modalità di riserva, legenda, de-anonimizzazione completa, anti-fuga).
+- **Tappa 5 fatta** (10/11/2026): whitelist, 356 test verdi. `Whitelist` (per nome intero e per parole) e lista base
+  `ListeBase.ParoleGeneriche` (sigle tecniche, verbi, preposizioni, nomi generici IT/EN: `Data`, `Id`, `Codice`,
+  `Log`, `Storico`, `Get`...; **niente parole di dominio**: ordini, clienti, fatture...). Regole di decisione, in
+  quest'ordine (`AnonimizzatoreScript.Liste`): sistema → in chiaro; **blacklist → anonimizzato (vince su tutto)**;
+  matrice in chiaro → in chiaro; whitelist → in chiaro; altrimenti anonimizzato. Scelte di dettaglio:
+  - un nome resta in chiaro se **tutte** le sue parole sono generiche (`usp_GetData`); basta una parola di dominio
+    (`usp_GetOrdini`) per anonimizzarlo; le cifre contano come generiche;
+  - una voce del cliente a **una parola** vale come nome intero e come parola generica; una voce di **più parole**
+    (`OrdiniAperti`) vale solo come nome intero: le sue parole non diventano generiche;
+  - un nome che ha già un nome anonimo in mappa **resta anonimizzato** anche se poi entra in whitelist (nomi stabili);
+    si cambia solo con "rigenera nomi" (`MappaCliente.Contiene(ruolo, nome)`);
+  - vale per tutti i ruoli, anche con la matrice che anonimizza colonne/indici: `Id`, `Nome` restano in chiaro.
+  - Ancora da fare per la blacklist: applicarla alle **stringhe** e ai commenti (tappe 6 e 9).
+- **Prossimo passo**: tappa 6 (agganciare `GestoreCommenti` all'`AnonimizzatoreScript`: segnaposto `/* c001 */`, testi
+  originali nella mappa del cliente, ripristino nel `DeAnonimizzatore`). Poi 7-13 (sicurezza, infrastruttura nelle
+  stringhe e SQL dinamico, SQLCMD/modalità di riserva, legenda, de-anonimizzazione completa, anti-fuga).
 
 ## Regole fisse (repo pubblica)
 

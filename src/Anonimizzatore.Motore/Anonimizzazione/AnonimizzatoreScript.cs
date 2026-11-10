@@ -80,11 +80,11 @@ public static class AnonimizzatoreScript
             return new Elaborato(l, p, nomi, avvisi);
         }).ToList();
 
-        var blacklist = new Blacklist(profilo.Blacklist);
+        var liste = new Liste(profilo, mappa);
 
         // Fase A: oggetti, colonne, variabili e alias, nell'ordine in cui compaiono.
         foreach (var e in elaborati)
-            foreach (var nome in e.Nomi.Where(n => !RuoliComposti.Contains(n.Ruolo) && DaAnonimizzare(n, profilo, blacklist)))
+            foreach (var nome in e.Nomi.Where(n => !RuoliComposti.Contains(n.Ruolo) && liste.DaAnonimizzare(n)))
                 e.Sostituzioni[nome.IndiceToken] =
                     Riquota(mappa.Ottieni(nome.Ruolo, nome.Nome, TipoDi(nome, conoscenza)), nome.Apici);
 
@@ -95,7 +95,7 @@ public static class AnonimizzatoreScript
             {
                 // Per intero se la blacklist o la matrice lo chiedono, o se le parti non si possono sostituire in modo
                 // pulito; altrimenti solo le parti che sono oggetti anonimizzati.
-                var nuovo = DaAnonimizzare(nome, profilo, blacklist) ? null : SostituisciParti(nome.Nome, parti);
+                var nuovo = liste.DaAnonimizzare(nome) ? null : SostituisciParti(nome.Nome, parti);
                 nuovo ??= mappa.Ottieni(nome.Ruolo, nome.Nome);
                 if (nuovo != nome.Nome) e.Sostituzioni[nome.IndiceToken] = Riquota(nuovo, nome.Apici);
             }
@@ -119,9 +119,25 @@ public static class AnonimizzatoreScript
         return new ScriptAnonimizzato(string.Concat(testi), e.Avvisi);
     }
 
-    private static bool DaAnonimizzare(NomeTrovato nome, Profilo profilo, Blacklist blacklist) =>
-        !nome.DiSistema
-        && (blacklist.Contiene(nome.Nome) || profilo.TrattamentoDi(nome.Ruolo) == Trattamento.Anonimizza);
+    /// <summary>
+    /// La decisione per ogni nome, in quest'ordine: oggetto di sistema → in chiaro; blacklist → anonimizzato (vince
+    /// su tutto); tipo di oggetto in chiaro nella matrice → in chiaro; whitelist → in chiaro, salvo che il nome abbia
+    /// già un nome anonimo (i nomi assegnati restano stabili: si cambiano solo con "rigenera nomi"); altrimenti
+    /// anonimizzato.
+    /// </summary>
+    private sealed class Liste(Profilo profilo, MappaCliente mappa)
+    {
+        private readonly Blacklist _blacklist = new(profilo.Blacklist);
+        private readonly Whitelist _whitelist = new(profilo.Whitelist);
+
+        public bool DaAnonimizzare(NomeTrovato nome)
+        {
+            if (nome.DiSistema) return false;
+            if (_blacklist.Contiene(nome.Nome)) return true;
+            if (profilo.TrattamentoDi(nome.Ruolo) != Trattamento.Anonimizza) return false;
+            return !_whitelist.Contiene(nome.Nome) || mappa.Contiene(nome.Ruolo, nome.Nome);
+        }
+    }
 
     /// <summary>Tipo SQL noto per colonne, variabili e parametri (serve al nome: <c>col_vc50_012</c>).</summary>
     private static string? TipoDi(NomeTrovato nome, Conoscenza conoscenza) =>
