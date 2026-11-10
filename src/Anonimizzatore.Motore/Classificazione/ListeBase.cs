@@ -1,0 +1,118 @@
+using Anonimizzatore.Motore.Mappa;
+
+namespace Anonimizzatore.Motore.Classificazione;
+
+/// <summary>
+/// Liste fisse di SQL Server: oggetti di sistema che restano sempre in chiaro (l'IA li conosce già).
+/// Nessun nome di cliente: qui ci sono solo nomi che esistono in ogni installazione.
+/// </summary>
+public static class ListeBase
+{
+    private static readonly HashSet<string> SchemiPredefiniti = new(NomeSql.Confronto)
+    {
+        "dbo", "sys", "INFORMATION_SCHEMA", "guest",
+    };
+
+    // Negli schemi "sys" e "INFORMATION_SCHEMA" ogni oggetto è di sistema.
+    private static readonly HashSet<string> SchemiSoloSistema = new(NomeSql.Confronto)
+    {
+        "sys", "INFORMATION_SCHEMA",
+    };
+
+    private static readonly HashSet<string> DatabaseSistema = new(NomeSql.Confronto)
+    {
+        "master", "model", "msdb", "tempdb", "distribution", "mssqlsystemresource",
+    };
+
+    // Viste di compatibilità senza schema (sysobjects, syscolumns...): ancora molto usate negli script vecchi.
+    private static readonly HashSet<string> VisteLegacy = new(NomeSql.Confronto)
+    {
+        "sysobjects", "syscolumns", "sysindexes", "sysindexkeys", "sysusers", "sysdatabases", "sysprocesses",
+        "syscomments", "sysfiles", "sysfilegroups", "sysforeignkeys", "sysconstraints", "sysdepends", "syslogins",
+        "sysmessages", "sysservers", "systypes", "sysreferences", "sysperfinfo", "syspermissions", "sysprotects",
+        "syscurconfigs", "sysconfigures", "syslanguages", "syslockinfo", "sysmembers", "sysxlogins", "sysdevices",
+    };
+
+    private static readonly string[] PrefissiProcedureSistema =
+    [
+        "sp_help", "sp_cursor", "sp_trace_", "sp_xml_", "sp_cdc_", "sp_fulltext_", "sp_replication", "sp_repl",
+        "sp_ms", "sp_syscollector", "sp_add_job", "sp_update_job", "sp_delete_job", "sp_start_job", "sp_stop_job",
+        "sp_add_schedule", "sp_update_schedule", "sp_delete_schedule", "sp_attach_schedule", "sp_detach_schedule",
+        "sp_add_operator", "sp_update_operator", "sp_delete_operator", "sp_add_alert", "sp_update_alert",
+        "sp_delete_alert", "sp_add_notification", "sp_add_category", "sp_add_proxy", "sp_grant_login_to_proxy",
+        "sp_addlinkedserver", "sp_droplinkedserver", "sp_addlinkedsrvlogin", "sp_droplinkedsrvlogin",
+    ];
+
+    private static readonly HashSet<string> ProcedureSistema = new(NomeSql.Confronto)
+    {
+        "sp_executesql", "sp_prepare", "sp_execute", "sp_unprepare", "sp_prepexec", "sp_prepexecrpc",
+        "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename", "sp_renamedb", "sp_configure",
+        "sp_addrolemember", "sp_droprolemember", "sp_addsrvrolemember", "sp_dropsrvrolemember",
+        "sp_addlogin", "sp_droplogin", "sp_adduser", "sp_dropuser", "sp_grantdbaccess", "sp_revokedbaccess",
+        "sp_change_users_login", "sp_changedbowner", "sp_password", "sp_defaultdb", "sp_defaultlanguage",
+        "sp_serveroption", "sp_linkedservers", "sp_addserver", "sp_dropserver", "sp_attach_db", "sp_detach_db",
+        "sp_refreshview", "sp_refreshsqlmodule", "sp_recompile", "sp_updatestats", "sp_createstats", "sp_autostats",
+        "sp_tableoption", "sp_dboption", "sp_depends", "sp_columns", "sp_tables", "sp_stored_procedures",
+        "sp_fkeys", "sp_pkeys", "sp_statistics", "sp_databases", "sp_datatype_info", "sp_sproc_columns",
+        "sp_special_columns", "sp_server_info", "sp_describe_first_result_set",
+        "sp_describe_undeclared_parameters", "sp_addmessage", "sp_dropmessage", "sp_altermessage",
+        "sp_readerrorlog", "sp_cycle_errorlog", "sp_enumerrorlogs", "sp_send_dbmail", "sp_addextendedproperty",
+        "sp_updateextendedproperty", "sp_dropextendedproperty", "sp_set_session_context", "sp_getapplock",
+        "sp_releaseapplock", "sp_addtype", "sp_droptype", "sp_validatelogins", "sp_addumpdevice",
+        "sp_dropdevice", "sp_testlinkedserver", "sp_dropremotelogin", "sp_addremotelogin",
+        "sp_add_jobstep", "sp_update_jobstep", "sp_delete_jobstep", "sp_add_jobserver", "sp_delete_jobserver",
+        "sp_add_jobschedule", "sp_delete_jobschedule", "sp_help_jobschedule",
+        "sp_msforeachtable", "sp_msforeachdb", "sp_oacreate", "sp_oamethod", "sp_oadestroy", "sp_oagetproperty",
+        "sp_oasetproperty", "sp_oageterrorinfo", "sp_start_job", "sp_stop_job", "sp_delete_backuphistory",
+        "xp_cmdshell", "xp_msver", "xp_fixeddrives", "xp_fileexist", "xp_dirtree", "xp_subdirs", "xp_create_subdir",
+        "xp_delete_file", "xp_availablemedia", "xp_enumgroups", "xp_logininfo", "xp_loginconfig", "xp_readerrorlog",
+        "xp_instance_regread", "xp_instance_regwrite", "xp_regread", "xp_regwrite", "xp_regdeletevalue",
+        "xp_sqlagent_enum_jobs", "xp_sendmail", "xp_servicecontrol", "xp_sprintf", "xp_sscanf",
+    };
+
+    private static readonly HashSet<string> FunzioniSistema = new(NomeSql.Confronto)
+    {
+        "fn_my_permissions", "fn_listextendedproperty", "fn_trace_gettable", "fn_trace_getinfo", "fn_dblog",
+        "fn_dump_dblog", "fn_virtualfilestats", "fn_get_audit_file", "fn_xe_file_target_read_file",
+        "fn_varbintohexstr", "fn_varbintohexsubstring", "fn_helpcollations", "fn_servershareddrives",
+        "fn_validate_plan_guide", "fn_cdc_get_min_lsn", "fn_cdc_get_max_lsn", "fn_cdc_map_time_to_lsn",
+        "fn_cdc_map_lsn_to_time", "fn_cdc_increment_lsn", "fn_cdc_decrement_lsn", "fn_cdc_has_column_changed",
+        "fn_cdc_is_bit_set", "fn_cdc_get_column_ordinal", "fn_hadr_backup_is_preferred_replica",
+        "fn_hadr_is_primary_replica",
+    };
+
+    // Metodi di tipi (XML, hierarchyid, geography...) che si scrivono come una chiamata di funzione con prefisso
+    // (colonna.value(...), @geo.STDistance(...)): non sono funzioni dell'utente.
+    private static readonly HashSet<string> MetodiDiOggetto = new(NomeSql.Confronto)
+    {
+        "value", "query", "nodes", "exist", "modify",
+        "GetAncestor", "GetDescendant", "GetLevel", "GetRoot", "IsDescendantOf", "Read", "Reparent", "ToString",
+        "Parse", "Lat", "Long", "Z", "M", "Point", "Reduce",
+    };
+
+    /// <summary>Schema che restano in chiaro: <c>dbo</c>, <c>sys</c>, <c>INFORMATION_SCHEMA</c>, <c>guest</c>.</summary>
+    public static bool SchemaPredefinito(string schema) => SchemiPredefiniti.Contains(NomeSql.Normalizza(schema));
+
+    public static bool DatabaseDiSistema(string database) => DatabaseSistema.Contains(NomeSql.Normalizza(database));
+
+    /// <summary>Vero se il nome è un oggetto di sistema (e quindi non va mai anonimizzato).</summary>
+    /// <param name="schema">Schema scritto davanti al nome, se c'è.</param>
+    public static bool OggettoDiSistema(Ruolo ruolo, string nome, string? schema)
+    {
+        if (schema is not null && SchemiSoloSistema.Contains(NomeSql.Normalizza(schema))) return true;
+
+        nome = NomeSql.Normalizza(nome);
+        return ruolo switch
+        {
+            Ruolo.Procedura => ProcedureSistema.Contains(nome)
+                               || PrefissiProcedureSistema.Any(p => nome.StartsWith(p, StringComparison.OrdinalIgnoreCase)),
+            Ruolo.Funzione => FunzioniSistema.Contains(nome),
+            Ruolo.Tabella or Ruolo.Vista => VisteLegacy.Contains(nome),
+            _ => false,
+        };
+    }
+
+    /// <summary>Metodo di un tipo (es. <c>value</c> di XML): da non scambiare per una funzione utente.</summary>
+    public static bool MetodoDiOggetto(string nome) =>
+        MetodiDiOggetto.Contains(nome) || nome.StartsWith("ST", StringComparison.Ordinal);
+}

@@ -23,7 +23,23 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   - un solo file cifrato per profilo, `{Id}.anonprofile` (profilo + mappa insieme): il nome del cliente non compare
     nel nome del file;
   - i nomi generati saltano i nomi reali già in mappa e i "nomi riservati" (es. dallo schema importato).
-- **Prossimo passo**: tappa 3 del piano (nomi degli oggetti, livello 1, e prima prova di andata e ritorno).
+- **Tappa 3 fatta** (10/11/2026): `Classificazione/` (`ListeBase`, `Conoscenza`, `PreAnalisi`, `Classificatore`) e
+  `Anonimizzazione/AnonimizzatoreScript` (punto d'ingresso: `Anonimizza(script, profilo, mappa)`), 99 test verdi.
+  Livello 1 completo: server, database, schema, tabelle, viste, procedure, funzioni, trigger, temporanee, nomi in più
+  parti, parentesi, prefissi di colonna (`Ordini.Id`), alias/CTE in chiaro. Scelte di dettaglio:
+  - la classe si chiama `AnonimizzatoreScript` (non `Anonimizzatore`: sarebbe uguale al namespace e darebbe ambiguità);
+  - script con errori di sintassi: `Testo = null` + avviso, mai testo non anonimizzato (la modalità di riserva è la
+    tappa 10);
+  - tipi definiti dall'utente (`dbo.CodiceCliente`) restano in chiaro con avviso;
+  - i nomi veri presenti negli script sono "riservati" nella mappa: un nome generato non li copia mai;
+  - limite noto: la mappa tiene la **prima scrittura** di un nome (`ORDINI` vs `Ordini`): l'andata e ritorno è
+    identica solo se il maiuscolo/minuscolo è coerente, altrimenti coincide a meno delle maiuscole.
+  - non ancora coperti (tappe successive): colonne/variabili/constraint (4), liste (5), commenti (6), sicurezza (7),
+    stringhe e SQL dinamico (8-9). Per ora, per esempio, `PK_Ordini` e il testo dei commenti restano in chiaro.
+- **Sessioni parallele proposte** (10/11/2026, ognuna sul suo ramo, da riunire in `main` a mano): `DeAnonimizzatore`
+  (tappa 12), `GestoreCommenti` (tappa 6), `AnalizzatoreInfrastruttura` (parte pura-testo della tappa 8). Non
+  modificano CLAUDE.md: lo aggiorna chi li riunisce.
+- **Prossimo passo**: tappa 4 (colonne, variabili, alias, indici e constraint, nomi composti `FK_Clienti_Ordini`).
 
 ## Regole fisse (repo pubblica)
 
