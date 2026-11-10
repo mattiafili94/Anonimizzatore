@@ -217,9 +217,32 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   - un numero scritto senza gli zeri (`tbl_1`, `usp_1`, `TBL_01`) si riconosce lo stesso (`DeAnonimizzatore.Cerca`).
   - Verificati i formati reali delle risposte: markdown (grassetto, apici inversi, blocchi ```sql), `"TBL_001"`, `(tbl_001)`, nomi
     composti inventati (`tbl_001_archivio`), tipo sbagliato nel nome di colonna, `[dom_01\usr_001]`.
-- **Prossimo passo**: tappa 13 (**controllo anti-fuga**: cerca nell'output i nomi originali anonimizzati e le parole della blacklist,
-  ri-legge il risultato per verificare che sia T-SQL valido; segnala testi liberi, descrizioni dei job, `NAME` dei backup, percorsi
-  degli URL; copia bloccata finché l'utente non conferma). Poi la tappa 14: giro con gli script reali di Mattia in `prove-locali/`.
+- **Tappa 13 fatta** (10/11/2026): controllo anti-fuga, 577 test verdi. `ControlloAntiFuga.Verifica(originali, risultato, mappa,
+  profilo, schemaAnonimizzato?)` → `EsitoControllo(Fughe)` con `Pulito` e `RichiedeConferma` (c'è una fuga `Bloccante`: la copia resta
+  bloccata finché l'utente non conferma). Ogni `Fuga` ha tipo, gravità, valore, **script** (-1 = schema allegato), **riga** e messaggio.
+  Rilegge il **risultato** (lessico ScriptDom, righe SQLCMD a parte):
+  - **nome originale** di un oggetto anonimizzato (dalla mappa): in una **stringa**, in una riga SQLCMD o in un commento → `Bloccante`
+    (testi liberi, `NAME = N'Vendite full'` di un backup, il percorso di un URL); come **identificatore** → solo `Avviso` (di solito
+    una colonna o un alias lasciati in chiaro per scelta, es. `... AS Righe`), `Bloccante` se lo script era in modalità di riserva;
+  - **parole della blacklist** (anche voci di più parole, `Acme Srl`) ovunque, anche in colonne e variabili: sempre `Bloccante`;
+    i nomi anonimi (`tbl_001`, `col_vc50_001`, `dom_01\usr_001`...) non si segnalano mai;
+  - **password** rimaste (`PASSWORD = '...'`, `Pwd=...`, `SECRET =`, `-P ...`): `Bloccante`, e **il valore non si ripete mai** nel messaggio;
+    `<password>`, `0x00` e le variabili non contano;
+  - **commento** che non è un segnaposto `/* c001 */`: `Bloccante`;
+  - **validità**: se lo script originale era T-SQL valido (ignorando le righe SQLCMD) e quello anonimizzato no → `Bloccante`
+    (errore del motore); se l'originale non lo era non si pretende;
+  - **dati personali** nelle stringhe → solo `Avviso`: email, codice fiscale, IBAN (controllo mod 97), carta (Luhn), IPv4, URL.
+  Sugli esempi del progetto: tutti puliti tranne `backup-restore-acme.sql` (i due testi liberi noti, righe 4 e 31).
+
+## Stato della fase 1 (10/11/2026)
+
+Il **motore è completo** (tappe 1-13) e verificato con 577 test su esempi inventati. Manca la **tappa 14**: il giro con gli script
+realistici di Mattia, che li mette in `prove-locali/` (esclusa da git); per ogni problema trovato si scrive un test con un esempio
+**inventato** che lo riproduce. Poi si passa alla **fase 2** (interfaccia): API pubblica del motore da chiamare dall'interfaccia =
+`AnonimizzatoreScript.Anonimizza` → `TestoPerIA.Componi` → `ControlloAntiFuga.Verifica` (all'andata) e `DeAnonimizzatore.DeAnonimizza`
+(al ritorno, con `Avvisi`); profili con `ArchivioProfili` (DPAPI), `Profilo` (matrice, whitelist, blacklist), `MappaCliente`
+(nomi stabili, "rigenera nomi" = `Rigenera()`); schema importato = `SchemaDatabase` (da riempire con la query di import).
+- **Prossimo passo**: tappa 14 (script reali di Mattia in `prove-locali/`), poi la fase 2.
 
 ## Regole fisse (repo pubblica)
 
