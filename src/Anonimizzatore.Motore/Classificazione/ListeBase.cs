@@ -169,6 +169,10 @@ public static class ListeBase
     /// <summary>Schema che restano in chiaro: <c>dbo</c>, <c>sys</c>, <c>INFORMATION_SCHEMA</c>, <c>guest</c>.</summary>
     public static bool SchemaPredefinito(string schema) => SchemiPredefiniti.Contains(NomeSql.Normalizza(schema));
 
+    /// <summary>master, msdb, model: gli oggetti che ci stanno dentro sono tutti del sistema (tempdb no: ci stanno anche oggetti dell'utente).</summary>
+    public static bool DatabaseCentraleDiSistema(string database) =>
+        NomeSql.Normalizza(database).ToLowerInvariant() is "master" or "msdb" or "model";
+
     public static bool DatabaseDiSistema(string database) => DatabaseSistema.Contains(NomeSql.Normalizza(database));
 
     /// <summary>Vero se il nome è un oggetto di sistema (e quindi non va mai anonimizzato).</summary>

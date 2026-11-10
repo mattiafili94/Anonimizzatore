@@ -527,7 +527,9 @@ public sealed class Classificatore : TSqlFragmentVisitor
         else if (_previsti.TryGetValue(nome, out var previsto)) ruolo = previsto;
         else ruolo = _conoscenza.RuoloComeTabella(baseId.Value);
 
-        Aggiungi(baseId, ruolo, ListeBase.OggettoDiSistema(ruolo, baseId.Value, schema));
+        // Un oggetto di master, msdb o model (msdb..backupset, msdb.dbo.sysjobs) è del sistema, anche se non è nelle liste.
+        var inDbSistema = nome.DatabaseIdentifier is { } dbNome && ListeBase.DatabaseCentraleDiSistema(dbNome.Value);
+        Aggiungi(baseId, ruolo, inDbSistema || ListeBase.OggettoDiSistema(ruolo, baseId.Value, schema));
     }
 
     private void ChiamataFunzione(FunctionCall chiamata)
@@ -598,6 +600,7 @@ public sealed class Classificatore : TSqlFragmentVisitor
     private void Aggiungi(Identifier? id, Ruolo ruolo, bool sistema)
     {
         if (id is null || id.FirstTokenIndex < 0) return;
+        if (string.IsNullOrEmpty(id.Value)) return; // msdb..backupset: lo schema tra i due punti è vuoto
         if (id.Value.Contains("$(", StringComparison.Ordinal)) return; // variabile SQLCMD: il nome vero è nella riga :setvar
         _trovati.TryAdd(id.FirstTokenIndex, new NomeTrovato(id.FirstTokenIndex, ruolo, id.Value, id.QuoteType, sistema));
     }
