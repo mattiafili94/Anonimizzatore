@@ -137,6 +137,31 @@ public class ImportSchemaTest
     }
 
     [Fact]
+    public void Lo_schema_sopravvive_alla_cifratura_vera_di_Windows_e_il_file_non_lo_mostra_in_chiaro()
+    {
+        if (!OperatingSystem.IsWindows()) return; // DPAPI esiste solo su Windows
+
+        var cartella = Path.Combine(Path.GetTempPath(), "anonimizzatore-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var archivio = new ArchivioProfili(cartella, new ProtezioneDpapi());
+            var profilo = new Profilo { Nome = "Prova" };
+            archivio.Salva(profilo, new MappaCliente(), ImportSchema.Leggi(Esempio()).Schema);
+
+            // "Riavvio": un archivio nuovo sulla stessa cartella.
+            var caricato = new ArchivioProfili(cartella, new ProtezioneDpapi()).CaricaTutti().Single();
+
+            Assert.Equal(3, caricato.Schema!.Tabelle.Count);
+            var grezzo = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(Directory.GetFiles(cartella, "*.anonprofile").Single()));
+            Assert.DoesNotContain("Ordini", grezzo);
+        }
+        finally
+        {
+            if (Directory.Exists(cartella)) Directory.Delete(cartella, true);
+        }
+    }
+
+    [Fact]
     public void Un_profilo_senza_schema_si_carica_con_schema_nullo()
     {
         var cartella = Path.Combine(Path.GetTempPath(), "anonimizzatore-test-" + Guid.NewGuid().ToString("N"));
