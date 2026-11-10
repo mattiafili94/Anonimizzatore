@@ -25,6 +25,7 @@ public static partial class GeneratoreLegenda
         (@"\btrg_\d{3,}\b", "trg_001", "trigger"),
         (@"\bjob_\d{3,}\b", "job_001", "job di SQL Agent"),
         (@"\bag_\d{2,}\b", "ag_01", "gruppo di disponibilità (Always On)"),
+        (@"\btxt_\d{3,}\b", "txt_001", "parola o nome sostituito dentro un testo (stringa o messaggio)"),
         (@"\busr_\d{3,}\b", "usr_001", "login o utente"),
         (@"\brol_\d{3,}\b", "rol_001", "ruolo"),
         (@"\bix_\d{3,}\b", "ix_001", "indice"),

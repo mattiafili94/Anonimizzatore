@@ -297,7 +297,7 @@ public static partial class ControlloAntiFuga
     private static partial Regex ParolaIdentificatore();
 
     [GeneratedRegex(
-        @"^(?:(?:srv|db|sch|dom|tbl|vw|usp|fn|trg|usr|rol|job|ix|pk|fk|df|ck|uq|al|dir|file|ip)_\d+" +
+        @"^(?:(?:srv|db|sch|dom|ag|txt|tbl|vw|usp|fn|trg|usr|rol|job|ix|pk|fk|df|ck|uq|al|dir|file|ip)_\d+" +
         @"|col_[a-z][a-z0-9]*(?:_\d+)?_\d+|@[vp]_[a-z][a-z0-9]*(?:_\d+)?_\d+|##?tmp_\d+|mail_\d+@example\.invalid)$",
         RegexOptions.IgnoreCase)]
     private static partial Regex NomeAnonimo();

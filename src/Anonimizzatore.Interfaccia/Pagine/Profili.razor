@@ -83,6 +83,19 @@
                     }
                 </div>
             }
+            <div class="gruppo">
+                <h3 class="gruppo-titolo type-label">Nomi dentro le stringhe</h3>
+                <div class="riga">
+                    <div class="riga-nome">
+                        <span>Messaggi, testi, nomi di backup, URL</span>
+                        <span class="campo-aiuto">
+                            Cambia solo i nomi già anonimizzati e le parole della blacklist (<span class="codice">txt_001</span>); il resto del testo resta com'è.
+                        </span>
+                    </div>
+                    <Segmenti Etichetta="Nomi dentro le stringhe" Voci="NomiNelleStringhe" Valore="@(profilo.Profilo.NomiNelleStringhe ? "Si" : "No")"
+                              ValoreChanged="v => ImpostaNomiNelleStringheAsync(profilo, v)" />
+                </div>
+            </div>
             <p class="campo-aiuto">Percorsi, indirizzi IP ed email trovati nelle stringhe vengono sempre anonimizzati.</p>
         </section>
 
@@ -395,6 +408,15 @@ else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
 
     private static readonly IReadOnlyList<Segmenti.Voce> Trattamenti =
         [new("Anonimizza", "Anonimizza"), new("InChiaro", "In chiaro")];
+
+    private static readonly IReadOnlyList<Segmenti.Voce> NomiNelleStringhe =
+        [new("Si", "Sostituisci"), new("No", "Lascia com'è")];
+
+    private async Task ImpostaNomiNelleStringheAsync(ProfiloSalvato p, string valore)
+    {
+        p.Profilo.NomiNelleStringhe = valore == "Si";
+        await Stato.SalvaAsync(p);
+    }
 
     private Guid? _aperto;
     private Dialoghi _dialogo;

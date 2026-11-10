@@ -40,6 +40,9 @@ public enum Ruolo
 
     /// <summary>Gruppo di disponibilità Always On (AG). In fondo all'elenco: i numeri dei ruoli già salvati non cambiano.</summary>
     GruppoDisponibilita,
+
+    /// <summary>Parola o nome sostituito dentro un testo (stringa, messaggio): la blacklist nelle stringhe.</summary>
+    Termine,
 }
 
 /// <summary>
@@ -61,6 +64,7 @@ public static class FamigliaRuolo
         Ruolo.Trigger => "trg",
         Ruolo.Job => "job",
         Ruolo.GruppoDisponibilita => "ag",
+        Ruolo.Termine => "txt",
         Ruolo.Login or Ruolo.Utente => "usr",
         Ruolo.RuoloDb => "rol",
         Ruolo.Indice => "ix",

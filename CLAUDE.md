@@ -240,8 +240,17 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
   e le tabelle di msdb (`sysjobs`, `backupset`...) restano in chiaro; in modalità di riserva `FROM DISK/URL/WINDOWS` non sono
   tabelle; nuovo ruolo `GruppoDisponibilita` (`ag_01`) per `CREATE/ALTER/DROP AVAILABILITY GROUP` e `SET HADR AVAILABILITY GROUP`,
   repliche e listener come `srv_`, endpoint `TCP://...`; le etichette cloud (`blob.core.windows.net`) restano in chiaro.
-  **Non ancora fatto**: la blacklist nelle stringhe (`LIKE N'%Zeta%'`, `'Zeta Spa'`, `N'ZETA\mario'` come valore): oggi li segnala
-  solo l'anti-fuga (Bloccante).
+- **Blacklist e nomi nelle stringhe** (10/11/2026, 631 test verdi): `TerminiNelleStringhe` (ultimo passo di ogni stringa che non è
+  nome/segreto/SQL, dopo percorsi/IP/host). In quest'ordine: `DOMINIO\utente` con dominio in blacklist o già noto → `dom_01\usr_001`;
+  voci della blacklist di più parole → un `txt_NNN`; nomi già in mappa (dizionario, parole intere); poi parola per parola (l'underscore
+  separa: `Vendite_FULL` → `db_01_FULL`): un nome in mappa prende il suo nome anonimo, una parola che contiene un termine della
+  blacklist diventa `txt_NNN` (nuovo ruolo `Termine`, ripristinabile, mai tra parentesi quadre). Il resto del testo (dati, numeri,
+  parole comuni) non si tocca; i nomi già anonimi non si ritoccano; `@variabile` e `#temp` mai. Interruttore per profilo
+  `Profilo.NomiNelleStringhe` (acceso di default; si cambia in Profili → "Nomi dentro le stringhe"); spento = come prima (l'anti-fuga
+  segnala). Legenda: `txt_001`. Con lo stato attuale gli esempi `backup-restore-acme` e tutto il basket non hanno fughe bloccanti.
+  **Limiti**: dentro un testo il nome torna con le maiuscole della prima scrittura (`/report/vendite` → `/report/Vendite`); le righe
+  SQLCMD (`:setvar`) non passano da qui; parole spezzate su più stringhe concatenate non si riconoscono; un nome noto uguale a una parola
+  comune cambia anche nei messaggi (si ripristina al ritorno).
 
 ## Stato della fase 1 (10/11/2026)
 

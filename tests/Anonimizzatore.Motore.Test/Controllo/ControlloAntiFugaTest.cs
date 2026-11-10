@@ -16,6 +16,7 @@ public class ControlloAntiFugaTest
     private static EsitoControllo Controlla(string[] script, string[] blacklist)
     {
         var profilo = NuovoProfilo(blacklist);
+        profilo.NomiNelleStringhe = false; // qui si prova il controllo su ciò che resta: la sostituzione nelle stringhe è in TerminiNelleStringheTest
         var mappa = new MappaCliente();
         var risultato = AnonimizzatoreScript.Anonimizza(script, profilo, mappa);
         return ControlloAntiFuga.Verifica(script, risultato, mappa, profilo);
@@ -57,6 +58,19 @@ public class ControlloAntiFugaTest
         Assert.True(esito.RichiedeConferma);
         Assert.Equal([4, 31], esito.Fughe.Where(f => f.Tipo == TipoFuga.NomeOriginale && f.Gravita == GravitaFuga.Bloccante).Select(f => f.Riga));
         Assert.All(esito.Fughe, f => Assert.Equal(0, f.Script));
+    }
+
+    [Fact]
+    public void Con_la_sostituzione_nelle_stringhe_accesa_l_esempio_di_backup_e_pulito_dai_nomi()
+    {
+        var script = new[] { LeggiEsempio("backup-restore-acme.sql") };
+        var profilo = NuovoProfilo("Acme"); // NomiNelleStringhe acceso (default)
+        var mappa = new MappaCliente();
+        var risultato = AnonimizzatoreScript.Anonimizza(script, profilo, mappa);
+
+        var esito = ControlloAntiFuga.Verifica(script, risultato, mappa, profilo);
+
+        Assert.DoesNotContain(esito.Fughe, f => f.Gravita == GravitaFuga.Bloccante);
     }
 
     // --- nomi originali ---

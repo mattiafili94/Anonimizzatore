@@ -26,6 +26,12 @@ public sealed class Profilo
     /// <summary>Parole sempre anonimizzate, anche dentro colonne, variabili e stringhe. Vince sulla whitelist.</summary>
     public List<string> Blacklist { get; init; } = [];
 
+    /// <summary>
+    /// Nelle stringhe (messaggi, testi, nomi di backup, URL) si sostituiscono i nomi già anonimizzati e le parole della blacklist
+    /// (<c>txt_001</c>); il resto del testo resta com'è. Acceso di default.
+    /// </summary>
+    public bool NomiNelleStringhe { get; set; } = true;
+
     public Trattamento TrattamentoDi(Ruolo ruolo) =>
         Matrice.TryGetValue(ruolo, out var t) ? t : MatriceDefault[ruolo];
 

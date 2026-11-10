@@ -48,7 +48,7 @@ public sealed partial class DeAnonimizzatore
     // a destra niente lettere/cifre (un "_" va bene).
     private const string FormaToken =
         @"(?<![\p{L}\p{N}@#])(?:" +
-        $"(?:srv|db|sch|dom|ag|tbl|vw|usp|fn|trg|job|usr|rol|ix|pk|fk|df|ck|uq|al)_{Numero}" +
+        $"(?:srv|db|sch|dom|ag|tbl|vw|usp|fn|trg|job|usr|rol|ix|pk|fk|df|ck|uq|al|txt)_{Numero}" +
         $"|col_{Tipo}_{Numero}" +
         $"|@[vp]_{Tipo}_{Numero}" +
         $"|##?tmp_{Numero}" +
@@ -276,6 +276,10 @@ public sealed partial class DeAnonimizzatore
             && m.Index + m.Length < testo.Length && testo[m.Index + m.Length] == '\'';
         if (traApiciSingoli) return r.Testo.Replace("'", "''");
 
+        // La parte utente di DOMINIO\utente (dom_01\usr_001) in un testo: niente parentesi quadre (dentro [ ] ci pensa
+        // SostituisciInParentesi).
+        if (m.Index > 0 && testo[m.Index - 1] == '\\') return r.Testo;
+
         var daQuotare = r.CopreTutto
             ? DaQuotare(r.Sostituite[0])
             : r.Sostituite.Any(v => !SoloCaratteri(v));
@@ -327,6 +331,8 @@ public sealed partial class DeAnonimizzatore
     {
         // Variabili, parametri e temporanee portano già @ o #: tra parentesi non sarebbero valide.
         if (voce.Ruolo is Ruolo.Variabile or Ruolo.Parametro or Ruolo.Temporanea) return false;
+        // Un termine sostituito in un testo (txt_001) torna parola com'era: mai tra parentesi quadre, nemmeno "Acme Srl".
+        if (voce.Ruolo == Ruolo.Termine) return false;
         return !IdentificatoreRegolare().IsMatch(voce.Originale) || ParoleRiservate.Contains(voce.Originale);
     }
 

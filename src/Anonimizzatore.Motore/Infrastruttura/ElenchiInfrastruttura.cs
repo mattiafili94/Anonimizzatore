@@ -46,7 +46,7 @@ internal static partial class ElenchiInfrastruttura
         "errorlog", "agent", "files", "file", "program", "microsoft", "server", "mssql", "mssqlserver", "windows", "users",
         "user", "public", "default", "pipe", "query",
         // prefissi dei nomi già anonimizzati: così analizzare due volte lo stesso testo non cambia nulla
-        "srv", "dom", "ag", "dir", "ip", "mail", "sch", "tbl", "vw", "usp", "fn", "trg", "usr", "rol",
+        "srv", "dom", "ag", "txt", "dir", "ip", "mail", "sch", "tbl", "vw", "usp", "fn", "trg", "usr", "rol",
     };
 
     public static readonly HashSet<string> DatabaseDiSistema = new(NomeSql.Confronto)

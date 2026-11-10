@@ -91,12 +91,13 @@ public static partial class AnonimizzatoreScript
     }
 
     /// <summary>Tutto ciò che serve per decidere e riscrivere un nome: la stessa cosa per script, SQL dinamico e righe SQLCMD.</summary>
-    private sealed class Contesto(MappaCliente mappa, Conoscenza conoscenza, Liste liste, Infra infra)
+    private sealed class Contesto(MappaCliente mappa, Conoscenza conoscenza, Liste liste, Infra infra, TerminiNelleStringhe termini)
     {
         public MappaCliente Mappa { get; } = mappa;
         public Conoscenza Conoscenza { get; } = conoscenza;
         public Liste Liste { get; } = liste;
         public Infra Infra { get; } = infra;
+        public TerminiNelleStringhe Termini { get; } = termini;
 
         /// <summary>I nomi in mappa per la sostituzione per dizionario: si rifà quando la mappa è completa.</summary>
         public SqlDinamico.Dizionario Dizionario { get; set; } = new(mappa);
@@ -165,7 +166,8 @@ public static partial class AnonimizzatoreScript
         var attive = unita.Where(u => !u.Scartata && u.Classificazione is not null).ToList();
 
         var contesto = new Contesto(mappa, conoscenza, liste,
-            new Infra(new AnalizzatoreInfrastruttura(mappa), new AnalizzatoreInfrastruttura(mappa, new OpzioniInfrastruttura(TestoLibero: true))));
+            new Infra(new AnalizzatoreInfrastruttura(mappa), new AnalizzatoreInfrastruttura(mappa, new OpzioniInfrastruttura(TestoLibero: true))),
+            new TerminiNelleStringhe(profilo, mappa));
 
         // Fase A: oggetti, colonne, variabili e alias, nell'ordine in cui compaiono.
         void FaseA(IEnumerable<Unita> daFare)
@@ -356,8 +358,11 @@ public static partial class AnonimizzatoreScript
             var analizzatore = eComando ? c.Infra.TestoLibero : c.Infra.Letterali;
             var esito = analizzatore.Anonimizza(contenuto);
             foreach (var a in esito.Avvisi) Avvisa(a, token.Line);
-            if (!esito.Testo.Equals(stringa.Contenuto, StringComparison.Ordinal))
-                testi[i] = SqlDinamico.Ricompatta(stringa.Prefisso, esito.Testo);
+
+            // Per ultimo: nel testo che resta, i nomi già anonimizzati e le parole della blacklist (il resto non si tocca).
+            var finale = c.Termini.Sostituisci(esito.Testo, c.Dizionario);
+            if (!finale.Equals(stringa.Contenuto, StringComparison.Ordinal))
+                testi[i] = SqlDinamico.Ricompatta(stringa.Prefisso, finale);
         }
     }
 

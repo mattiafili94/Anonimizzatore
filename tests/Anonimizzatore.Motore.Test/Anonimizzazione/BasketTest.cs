@@ -32,6 +32,10 @@ public class BasketTest
         foreach (var vietato in new[] { "DISK", "WINDOWS", "URL", "TAPE" })
             Assert.DoesNotContain(mappa.Voci, v => v.Originale.Equals(vietato, StringComparison.OrdinalIgnoreCase));
 
+        // con la sostituzione nelle stringhe (acceso di default) l'anti-fuga non deve trovare nomi o parole della blacklist
+        var esito = ControlloAntiFuga.Verifica([originale], risultato, mappa, profilo);
+        Assert.DoesNotContain(esito.Fughe, f => f.Gravita == GravitaFuga.Bloccante);
+
         // andata e ritorno: uguale all'originale, tranne password (mai ripristinate) e commenti (qui senza regole di righe vuote)
         var ripristinato = Aiuti.RipristinaPerProva(s.Testo!, mappa);
         string Pulisci(string t) => string.Join("\n", t.Replace("\r", "").Split('\n').Select(l => l.TrimEnd()).Where(l => l.Length > 0));

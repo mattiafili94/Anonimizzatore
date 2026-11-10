@@ -149,7 +149,7 @@ public class SqlDinamicoTest
 
         Assert.Equal("""
             IF OBJECT_ID(N'dbo.tbl_001', N'U') IS NOT NULL DROP TABLE dbo.tbl_001;
-            DECLARE @tabella sysname = N'tbl_001', @nota varchar(50) = 'Ordini elaborati';
+            DECLARE @tabella sysname = N'tbl_001', @nota varchar(50) = 'tbl_001 elaborati';
             SELECT COL_LENGTH('dbo.tbl_001', 'col_x_001'), col_x_001 FROM dbo.tbl_001;
             """, anon);
     }

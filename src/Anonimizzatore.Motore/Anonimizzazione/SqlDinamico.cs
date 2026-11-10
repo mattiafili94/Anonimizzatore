@@ -136,6 +136,9 @@ internal static partial class SqlDinamico
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
+        /// <summary>Il nome anonimo di un nome già in mappa, o <c>null</c>.</summary>
+        public string? Cerca(string nome) => _anonimi.TryGetValue(nome, out var anonimo) ? anonimo : null;
+
         public string Sostituisci(string testo)
         {
             if (_regex is null) return testo;

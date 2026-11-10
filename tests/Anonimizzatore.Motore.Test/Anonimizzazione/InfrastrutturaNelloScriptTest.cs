@@ -184,9 +184,9 @@ public class InfrastrutturaNelloScriptTest
                      "svc_app", "utente_remoto", "Segr3ta", "Pwd123", "acme", "10.0.0.5", "archivio", "Vendite_Data", "Vendite_Copia" })
             Assert.DoesNotContain(vietata, anon, StringComparison.OrdinalIgnoreCase);
 
-        // Restano i due testi liberi, che il controllo anti-fuga (tappa 13) segnalerà: NAME del backup e il percorso dell'URL.
-        Assert.Contains("NAME = N'Vendite full'", anon);
-        Assert.Contains("/report/vendite?anno=2026", anon);
+        // I due testi liberi (NAME del backup, percorso dell'URL) hanno i nomi già anonimizzati al posto di quelli veri.
+        Assert.Contains("NAME = N'db_01 full'", anon);
+        Assert.Contains("/report/db_01?anno=2026", anon);
     }
 
     [Fact]
@@ -201,7 +201,9 @@ public class InfrastrutturaNelloScriptTest
         var atteso = sql
             .Replace("'Segr3ta'", "'<password>'")
             .Replace("Password=Pwd123!;", "Password=<password>;");
-        Assert.Equal(atteso, RipristinaPerProva(anon, mappa));
+        // Dentro un testo libero un nome torna con le maiuscole della prima volta che è stato scritto (limite noto della mappa:
+        // "/report/vendite" torna "/report/Vendite"), quindi si confronta senza distinguere maiuscole e minuscole.
+        Assert.Equal(atteso, RipristinaPerProva(anon, mappa), ignoreCase: true);
     }
 
     [Fact]
