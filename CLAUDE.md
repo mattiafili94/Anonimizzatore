@@ -207,11 +207,19 @@ prime armi con Claude Code: spiegare le cose in modo semplice.
     blacklist, matrice, whitelist; indici/constraint con le parti sostituite); è T-SQL valido e si de-anonimizza.
   - **Limiti noti**: la legenda e lo schema sono in italiano; con lo schema un nome nuovo (tabella non citata ma referenziata) crea
     voci in mappa; le viste dello schema non hanno la definizione (solo le colonne).
-- **Prossimo passo**: tappa 12 (de-anonimizzazione: rifinire e fare il **report** completo per la fase 2: sostituzioni, token senza
-  corrispondenza, segnaposto commento persi, password/SID non ripristinabili, nomi che l'IA ha cambiato di maiuscole) e tappa 13
-  (**controllo anti-fuga**: cerca nell'output i nomi originali anonimizzati e le parole della blacklist, ri-legge il risultato
-  per verificare che sia T-SQL valido; segnala testi liberi, descrizioni dei job, `NAME` dei backup, percorsi degli URL; copia
-  bloccata finché l'utente non conferma). Poi la tappa 14: giro con gli script reali di Mattia in `prove-locali/`.
+- **Tappa 12 fatta** (10/11/2026): report di ripristino, 548 test verdi. `RisultatoDeAnonimizzazione.Avvisi` (lista di `Avviso`
+  con la riga nella risposta dell'IA, 0 se non c'è), vuoto se è tornato tutto:
+  - nomi con la forma di un nome anonimo ma **non in mappa** (`tbl_099`: l'IA può averli inventati), raggruppati con il conteggio e la
+    prima riga; stessa cosa per `dir_`, `file_`, `ip_`, `mail_`;
+  - **commenti persi**: se ne parla solo quando la risposta contiene almeno un segnaposto (altrimenti è un pezzo di codice, non
+    un commento perso); anche commenti `--` spostati su una riga a sé e segnaposto sconosciuti; elenco di al massimo 8;
+  - `<password>` e SID azzerati ancora presenti nel testo ripristinato (vanno riempiti a mano), con la riga;
+  - un numero scritto senza gli zeri (`tbl_1`, `usp_1`, `TBL_01`) si riconosce lo stesso (`DeAnonimizzatore.Cerca`).
+  - Verificati i formati reali delle risposte: markdown (grassetto, apici inversi, blocchi ```sql), `"TBL_001"`, `(tbl_001)`, nomi
+    composti inventati (`tbl_001_archivio`), tipo sbagliato nel nome di colonna, `[dom_01\usr_001]`.
+- **Prossimo passo**: tappa 13 (**controllo anti-fuga**: cerca nell'output i nomi originali anonimizzati e le parole della blacklist,
+  ri-legge il risultato per verificare che sia T-SQL valido; segnala testi liberi, descrizioni dei job, `NAME` dei backup, percorsi
+  degli URL; copia bloccata finché l'utente non conferma). Poi la tappa 14: giro con gli script reali di Mattia in `prove-locali/`.
 
 ## Regole fisse (repo pubblica)
 

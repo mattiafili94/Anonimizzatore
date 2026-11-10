@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Anonimizzatore.Motore.Classificazione;
 using Anonimizzatore.Motore.Mappa;
 
 namespace Anonimizzatore.Motore.Deanonimizzazione;
@@ -15,7 +16,15 @@ public sealed record TokenNonTrovato(string Token, int Posizione);
 /// <param name="NonTrovati">Token che sembrano anonimi ma senza corrispondenza: restano com'erano nel testo.</param>
 /// <param name="Commenti">Esito del ripristino dei commenti (segnaposto <c>/* c001 */</c>): quali l'IA ha perso, quali sono sconosciuti.</param>
 public sealed record RisultatoDeAnonimizzazione(
-    string Testo, int Sostituzioni, IReadOnlyList<TokenNonTrovato> NonTrovati, Commenti.RisultatoRipristino? Commenti = null);
+    string Testo, int Sostituzioni, IReadOnlyList<TokenNonTrovato> NonTrovati, Commenti.RisultatoRipristino? Commenti = null)
+{
+    /// <summary>
+    /// Il report per l'utente, già in frasi (con la riga nel testo ricevuto, 0 se non c'è): nomi anonimi senza corrispondenza
+    /// (l'IA può averli inventati), commenti che l'IA ha tolto o spostato, segnaposto <c>&lt;password&gt;</c> e SID da riempire a mano.
+    /// Vuoto se è tornato tutto.
+    /// </summary>
+    public IReadOnlyList<Avviso> Avvisi { get; init; } = [];
+}
 
 /// <summary>
 /// Rimette i nomi originali in una risposta dell'IA (testo libero: prosa + codice).
@@ -130,7 +139,108 @@ public sealed partial class DeAnonimizzatore
         // contenere qualcosa che assomiglia a un nome anonimo).
         var commenti = _mappa.Commenti.Ripristina(sb.ToString());
         return new RisultatoDeAnonimizzazione(
-            commenti.Testo, passata.Sostituzioni + infrastruttura.Sostituzioni.Count, passata.NonTrovati, commenti);
+            commenti.Testo, passata.Sostituzioni + infrastruttura.Sostituzioni.Count, passata.NonTrovati, commenti)
+        {
+            Avvisi = CostruisciReport(testo, commenti.Testo, passata, infrastruttura, commenti, _mappa.Commenti.Commenti.Count),
+        };
+    }
+
+    // --- report ---
+
+    private const int MassimoNelMessaggio = 8;
+
+    [GeneratedRegex(@"<password>")]
+    private static partial Regex SegnapostoPassword();
+
+    [GeneratedRegex(@"0x0{32}\b")]
+    private static partial Regex SegnapostoSid();
+
+    /// <param name="testoIntermedio">Il testo dopo il ripristino dell'infrastruttura: le posizioni di <c>NonTrovati</c> sono sue
+    /// (le righe sono quelle della risposta dell'IA, perché i ripristini non aggiungono né tolgono a capo).</param>
+    private static List<Avviso> CostruisciReport(
+        string testoIntermedio, string testoFinale, Passata passata, Infrastruttura.RisultatoRipristino infra,
+        Commenti.RisultatoRipristino commenti, int commentiNellaMappa)
+    {
+        var avvisi = new List<Avviso>();
+
+        // Nomi con la forma di un nome anonimo ma senza corrispondenza: un oggetto nuovo proposto dall'IA, oppure un nome sbagliato.
+        var visti = new HashSet<string>(NomeSql.Confronto);
+        foreach (var gruppo in passata.NonTrovati.GroupBy(t => t.Token, NomeSql.Confronto))
+        {
+            visti.Add(gruppo.Key);
+            var volte = gruppo.Count() > 1 ? $" ({gruppo.Count()} volte)" : "";
+            avvisi.Add(new Avviso(
+                $"'{gruppo.Key}' ha la forma di un nome anonimo ma non è nella mappa{volte}: l'ho lasciato com'è. " +
+                "Può essere un oggetto nuovo proposto dall'IA oppure un nome che ha cambiato.",
+                RigaDi(testoIntermedio, gruppo.First().Posizione)));
+        }
+        foreach (var nome in infra.NonTrovati.Where(visti.Add))
+            avvisi.Add(new Avviso($"'{nome}' ha la forma di un nome anonimo ma non è nella mappa: l'ho lasciato com'è.", 0));
+
+        // Commenti. Se nella risposta non c'è nessun segnaposto l'IA ha scritto solo un pezzo di codice (il caso più comune):
+        // non ha "perso" nulla, semplicemente non ha riscritto quel codice. Si segnala solo se ne ha conservati alcuni e altri no.
+        var segnapostoNelTesto = commentiNellaMappa - commenti.Persi.Count + commenti.Sconosciuti.Count > 0;
+        if (commenti.Persi.Count > 0 && segnapostoNelTesto)
+            avvisi.Add(new Avviso(
+                $"L'IA ha tolto {commenti.Persi.Count} {(commenti.Persi.Count == 1 ? "commento" : "commenti")} dello script originale " +
+                $"({Elenco(commenti.Persi.Select(GestoreCommentiSegnaposto))}): non sono tornati.", 0));
+        if (commenti.Sconosciuti.Count > 0)
+            avvisi.Add(new Avviso(
+                $"Segnaposto di commento che non esistono nella mappa ({Elenco(commenti.Sconosciuti.Select(GestoreCommentiSegnaposto))}): lasciati come sono.", 0));
+        if (commenti.Spostati.Count > 0)
+            avvisi.Add(new Avviso(
+                $"Dei commenti '--' sono stati messi su una riga a sé, per non commentare il codice che l'IA ha scritto dopo " +
+                $"({Elenco(commenti.Spostati.Select(GestoreCommentiSegnaposto))}).", 0));
+
+        // Segreti: non si ripristinano mai.
+        var password = SegnapostoPassword().Matches(testoFinale);
+        if (password.Count > 0)
+            avvisi.Add(new Avviso(
+                $"Nel testo {(password.Count == 1 ? "c'è 1 segnaposto" : $"ci sono {password.Count} segnaposto")} <password>: le password " +
+                "non si ripristinano, vanno inserite a mano.", RigaDi(testoFinale, password[0].Index)));
+        var sid = SegnapostoSid().Matches(testoFinale);
+        if (sid.Count > 0)
+            avvisi.Add(new Avviso(
+                $"Nel testo {(sid.Count == 1 ? "c'è 1 SID" : $"ci sono {sid.Count} SID")} azzerato: il SID vero non si ripristina, va inserito a mano.",
+                RigaDi(testoFinale, sid[0].Index)));
+
+        return avvisi;
+    }
+
+    private static string GestoreCommentiSegnaposto(int numero) => Commenti.GestoreCommenti.Segnaposto(numero);
+
+    private static string Elenco(IEnumerable<string> voci)
+    {
+        var tutte = voci.ToList();
+        return string.Join(", ", tutte.Take(MassimoNelMessaggio)) + (tutte.Count > MassimoNelMessaggio ? $" e altri {tutte.Count - MassimoNelMessaggio}" : "");
+    }
+
+    /// <summary>Numero di riga (da 1) di una posizione del testo.</summary>
+    private static int RigaDi(string testo, int posizione)
+    {
+        var righe = 1;
+        for (var i = 0; i < posizione && i < testo.Length; i++)
+            if (testo[i] == '\n') righe++;
+        return righe;
+    }
+
+    // Un nome anonimo scritto con un numero diverso dal nostro (tbl_1 invece di tbl_001): succede, si prova con la larghezza giusta.
+    [GeneratedRegex(@"^(?<f>[A-Za-z]+)_(?<n>[0-9]{1,9})$")]
+    private static partial Regex NomeConNumero();
+
+    private VoceMappa? Cerca(string token)
+    {
+        if (_mappa.TrovaOriginale(token) is { } trovata) return trovata;
+
+        var m = NomeConNumero().Match(token);
+        if (!m.Success) return null;
+        var numero = int.Parse(m.Groups["n"].Value);
+        foreach (var larghezza in new[] { 2, 3 })
+        {
+            var candidato = $"{m.Groups["f"].Value}_{numero.ToString("D" + larghezza)}";
+            if (!candidato.Equals(token, StringComparison.Ordinal) && _mappa.TrovaOriginale(candidato) is { } voce) return voce;
+        }
+        return null;
     }
 
     private string SostituisciInParentesi(string dentro, int offset, Passata passata)
@@ -186,7 +296,7 @@ public sealed partial class DeAnonimizzatore
             sb.Append(parola, ultimo, t.Index - ultimo);
             ultimo = t.Index + t.Length;
 
-            var voce = _mappa.TrovaOriginale(t.Value);
+            var voce = Cerca(t.Value);
             if (voce is null)
             {
                 passata.NonTrovati.Add(new TokenNonTrovato(t.Value, offset + t.Index));
