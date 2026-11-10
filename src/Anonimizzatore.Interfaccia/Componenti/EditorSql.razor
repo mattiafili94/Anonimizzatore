@@ -29,6 +29,13 @@
     /// <summary>Testo grigio mostrato finché l'editor è vuoto.</summary>
     [Parameter] public string? Segnaposto { get; set; }
 
+    /// <summary>Ctrl+Invio nell'editor: la scorciatoia dell'azione principale della pagina.</summary>
+    [Parameter] public EventCallback AlInvio { get; set; }
+
+    /// <summary>Chiamato da JavaScript con Ctrl+Invio.</summary>
+    [JSInvokable]
+    public Task QuandoInvio() => AlInvio.InvokeAsync();
+
     protected override void OnInitialized() => _ultimo = Valore ?? "";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

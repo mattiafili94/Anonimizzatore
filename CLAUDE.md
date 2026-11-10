@@ -248,7 +248,7 @@ realistici di Mattia, che li mette in `prove-locali/` (esclusa da git); per ogni
 ## Stato della fase 2 — interfaccia (10/11/2026)
 
 Piano: [docs/piano-fase-2.md](docs/piano-fase-2.md). Mattia ha deciso (10/11/2026) di fare la **tappa 14 alla fine**, dopo l'interfaccia.
-Fatto, con 588 test verdi (577 motore + 11 interfaccia):
+Fatto, con 600 test verdi (587 motore + 13 interfaccia):
 - **Progetti**: `src/Anonimizzatore.Interfaccia` (libreria Razor: servizi, componenti, pagine, CSS, Monaco, icone), `src/Anonimizzatore.App`
   (WPF + `BlazorWebView`, eseguibile `Anonimizzatore.exe`, target `net10.0-windows10.0.17763.0`: serve per la libreria Windows SDK di
   WebView2, senza crasha all'avvio), `tools/Anonimizzatore.Anteprima` (solo sviluppo: la stessa interfaccia in un browser, profili in una
@@ -271,10 +271,20 @@ Fatto, con 588 test verdi (577 motore + 11 interfaccia):
 - **Trucchi da ricordare**: in una grammatica Monarch `@nome` è un riferimento a un attributo (una chiocciola vera si scrive `@@`); in
   Blazor, un componente con `RenderFragment` con nome (`<Azioni>`) vuole anche `<ChildContent>` esplicito; la matrice per
   `Cartella`/`File`/`Ip`/`Email` non è nell'interfaccia perché il motore le anonimizza sempre.
-- **Non ancora fatto**: 2E (schema del database: query di import, incolla del risultato → `SchemaDatabase`; il motore lo accetta già,
-  `StatoApp` e le pagine non lo usano ancora), 2F (scorciatoie da tastiera es. Ctrl+Invio, rifinitura di accessibilità con prova nei tre
-  temi, test dei componenti con bUnit), fase 3 (cartella portabile self-contained, numero di versione da pubblicazione).
-- **Prossimo passo**: 2E e 2F, poi fase 3, poi tappa 14 (script reali in `prove-locali/`).
+- **Tappa 2E fatta** (10/11/2026): schema del database **dentro il profilo**, facoltativo. `ImportSchema` (motore, `SchemaDb/`): `Query`
+  (SELECT di sola lettura su `sys.*`, un solo risultato a righe: T, V, C, PK, IX, FK; provata solo come T-SQL valido col parser, **non
+  ancora eseguita su un SQL Server vero**) e `Leggi(testo)` (TSV di SSMS con o senza intestazioni, anche CSV, celle `NULL` ok) →
+  `RisultatoImportSchema(Schema, Avvisi, Errore)`. `ProfiloSalvato.Schema` si salva cifrato nello stesso file del profilo (campo
+  opzionale: i profili vecchi si aprono lo stesso). Interfaccia: componente `ImportaSchema` (copia la query, incolla il risultato, riepilogo
+  "N tabelle, M viste, K colonne") nel dialogo "Nuovo profilo" e nella sezione "Schema del database" del profilo (importa, aggiorna, togli);
+  `StatoApp.AnonimizzaAsync` usa lo schema (tipi delle colonne, DDL allegato nel testo per l'IA, controllo anti-fuga anche sullo schema);
+  cambiare lo schema o le regole di un profilo toglie il risultato già mostrato. Un testo incollato che non si legge blocca la creazione del
+  profilo (mai creato di nascosto senza schema). Nell'anteprima il limite dei messaggi SignalR è 16 MB (era 32 KB).
+- **Tappa 2F in parte**: scorciatoia **Ctrl+Invio** negli editor (Anonimizza / Ripristina; il testo si manda prima dell'azione).
+- **Non ancora fatto**: resto di 2F (rifinitura di accessibilità con prova nei tre temi, test dei componenti con bUnit), fase 3 (cartella
+  portabile self-contained, numero di versione da pubblicazione). Il testo degli script scritto negli editor **non** si salva alla chiusura
+  dell'app (i profili sì: sono su disco in `%APPDATA%\Anonimizzatore\profili`, cifrati con DPAPI, e si caricano una volta all'avvio).
+- **Prossimo passo**: resto di 2F, poi fase 3, poi tappa 14 (script reali in `prove-locali/`).
 
 ## Regole fisse (repo pubblica)
 

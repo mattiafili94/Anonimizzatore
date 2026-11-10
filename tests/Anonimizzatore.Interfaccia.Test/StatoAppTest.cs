@@ -1,6 +1,7 @@
 using Anonimizzatore.Interfaccia.Servizi;
 using Anonimizzatore.Motore.Mappa;
 using Anonimizzatore.Motore.Profili;
+using Anonimizzatore.Motore.SchemaDb;
 
 namespace Anonimizzatore.Interfaccia.Test;
 
@@ -177,6 +178,57 @@ public sealed class StatoAppTest : IDisposable
 
         Assert.Single(riavviato.Profili);
         Assert.Single(riavviato.ProfiliIllegibili);
+    }
+
+    private static SchemaDatabase SchemaDiProva() => ImportSchema.Leggi(string.Join("\n",
+        "Tipo\tSchema\tOggetto\tNome\tPosizione\tDettaglio\tExtra1\tExtra2\tExtra3",
+        "T\tdbo\tOrdini\t\t0\t\t\t\t",
+        "C\tdbo\tOrdini\tId\t1\tint\tNOTNULL\tIDENTITY\t",
+        "C\tdbo\tOrdini\tTotale\t2\tdecimal(18,2)\tNULLABLE\t\t",
+        "PK\tdbo\tOrdini\tPK_Ordini\t1\tId\tUNIQUE\t\t")).Schema!;
+
+    [Fact]
+    public async Task Un_profilo_creato_con_lo_schema_lo_ritrova_al_riavvio_e_lo_allega_al_testo_per_l_IA()
+    {
+        var stato = Nuovo();
+        await stato.CaricaAsync();
+        await stato.CreaProfiloAsync("Cliente di prova", SchemaDiProva());
+        stato.Script[0] = "SELECT Id, Totale FROM dbo.Ordini;";
+
+        var riavviato = Nuovo();
+        await riavviato.CaricaAsync();
+        Assert.Single(riavviato.Corrente!.Schema!.Tabelle);
+
+        riavviato.Script[0] = "SELECT Id, Totale FROM dbo.Ordini;";
+        await riavviato.AnonimizzaAsync();
+
+        var testo = riavviato.Anonimizzato!.Testo.Testo;
+        Assert.Contains("SCHEMA", testo);
+        Assert.Contains("CREATE TABLE", testo);
+        Assert.DoesNotContain("Ordini", testo);
+    }
+
+    [Fact]
+    public async Task Cambiare_o_togliere_lo_schema_toglie_il_risultato_e_si_salva()
+    {
+        var stato = Nuovo();
+        await stato.CaricaAsync();
+        await stato.CreaProfiloAsync("Cliente di prova");
+        stato.Script[0] = "SELECT Id FROM dbo.Ordini;";
+        await stato.AnonimizzaAsync();
+        Assert.Null(stato.Corrente!.Schema);
+
+        await stato.ImpostaSchemaAsync(stato.Corrente.Profilo.Id, SchemaDiProva());
+
+        Assert.Null(stato.Anonimizzato);
+        var riavviato = Nuovo();
+        await riavviato.CaricaAsync();
+        Assert.NotNull(riavviato.Corrente!.Schema);
+
+        await riavviato.ImpostaSchemaAsync(riavviato.Corrente.Profilo.Id, null);
+        var terzo = Nuovo();
+        await terzo.CaricaAsync();
+        Assert.Null(terzo.Corrente!.Schema);
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 # Piano della fase 2 — Interfaccia
 
-Stato: **in corso** (10/11/2026): 2A-2D fatte, 2E e 2F da fare. Le schermate sono una proposta: si cambiano facilmente, il motore non si tocca.
+Stato: **in corso** (10/11/2026): 2A-2E fatte, 2F in parte. Le schermate sono una proposta: si cambiano facilmente, il motore non si tocca.
 Design: **UI Top** (stesso design system di Arco, `../Arco/design-system/`, artifact BEUsaG1jRRShkG7r6DdHXN).
 
 ## 1. Identità del prodotto (le sei righe di UI Top)

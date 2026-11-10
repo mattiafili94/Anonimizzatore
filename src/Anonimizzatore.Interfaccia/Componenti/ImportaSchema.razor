@@ -1,0 +1,98 @@
+@using Anonimizzatore.Motore.SchemaDb
+@inject Appunti Appunti
+@inject Notifiche Notifiche
+
+@* Import (facoltativo) dello schema del database: si esegue una query in SSMS, si incolla il risultato qui. L'app non si collega al server. *@
+<div class="campo">
+    <span class="campo-etichetta">Schema del database (facoltativo)</span>
+    <span class="campo-aiuto">
+        Aiuta l'IA a capire meglio: tipi esatti delle colonne, chiavi e indici delle tabelle usate. Senza schema l'app funziona lo stesso.
+        Resta salvato, cifrato, insieme al profilo.
+    </span>
+</div>
+
+<ol class="passi">
+    <li>
+        <div class="passo-testo">
+            <span>Copia la query ed eseguila in SSMS nel database del cliente: legge soltanto, non modifica niente.</span>
+            <details>
+                <summary class="campo-aiuto">Vedi la query</summary>
+                <pre class="codice query-vista">@ImportSchema.Query</pre>
+            </details>
+        </div>
+        <button type="button" class="pulsante pulsante-secondario pulsante-compatto" @onclick="CopiaQueryAsync">
+            <Icona Nome="copy" Dimensione="16" />Copia la query
+        </button>
+    </li>
+    <li>
+        <div class="passo-testo">
+            <span>Copia tutta la griglia dei risultati <strong>con le intestazioni</strong> (in SSMS: clic sulla griglia, Ctrl+Maiusc+C) e incollala qui.</span>
+        </div>
+        <button type="button" class="pulsante pulsante-testo pulsante-compatto" @onclick="IncollaAsync">
+            <Icona Nome="clipboard-paste" Dimensione="16" />Incolla dagli appunti
+        </button>
+    </li>
+</ol>
+
+<div class="campo">
+    <label for="@_idCampo" class="visually-hidden">Risultato della query</label>
+    <textarea id="@_idCampo" rows="5" spellcheck="false" wrap="off" placeholder="Tipo   Schema   Oggetto   Nome …" value="@_testo" @onchange="CambiaTesto"></textarea>
+</div>
+
+@if (_esito is { Riuscito: true } ok)
+{
+    <Segnalazione Tipo="TipoSegnalazione.Successo" Titolo="Schema letto">@Riepilogo(ok.Schema!)</Segnalazione>
+    @foreach (var avviso in ok.Avvisi)
+    {
+        <Segnalazione Tipo="TipoSegnalazione.Attenzione">@avviso</Segnalazione>
+    }
+}
+else if (_esito is { } ko)
+{
+    <Segnalazione Tipo="TipoSegnalazione.Errore" Titolo="Non riesco a leggerlo">@ko.Errore</Segnalazione>
+}
+
+@code {
+    private readonly string _idCampo = "schema-" + Guid.NewGuid().ToString("N")[..8];
+    private string _testo = "";
+    private RisultatoImportSchema? _esito;
+
+    /// <summary>L'esito della lettura a ogni modifica del campo: <c>null</c> se è vuoto, altrimenti lo schema o l'errore.</summary>
+    [Parameter] public EventCallback<RisultatoImportSchema?> EsitoChanged { get; set; }
+
+    public static string Riepilogo(SchemaDatabase schema) =>
+        $"{schema.Tabelle.Count(t => !t.EVista)} tabelle, {schema.Tabelle.Count(t => t.EVista)} viste, " +
+        $"{schema.Tabelle.Sum(t => t.Colonne.Count)} colonne.";
+
+    private async Task CopiaQueryAsync()
+    {
+        if (await Appunti.CopiaAsync(ImportSchema.Query)) Notifiche.Mostra("Query copiata");
+        else _esito = new RisultatoImportSchema(null, [], "Il sistema non ha permesso di scrivere negli appunti: apri «Vedi la query» e copiala con Ctrl+C.");
+    }
+
+    private async Task IncollaAsync()
+    {
+        var testo = await Appunti.IncollaAsync();
+        if (testo is null)
+        {
+            _esito = new RisultatoImportSchema(null, [], "Non riesco a leggere gli appunti: incolla nel campo con Ctrl+V.");
+            return;
+        }
+        await Analizza(testo);
+    }
+
+    private Task CambiaTesto(ChangeEventArgs e) => Analizza(e.Value?.ToString() ?? "");
+
+    private async Task Analizza(string testo)
+    {
+        _testo = testo;
+        if (string.IsNullOrWhiteSpace(testo))
+        {
+            _esito = null;
+            await EsitoChanged.InvokeAsync(null);
+            return;
+        }
+        _esito = ImportSchema.Leggi(testo);
+        await EsitoChanged.InvokeAsync(_esito);
+    }
+}

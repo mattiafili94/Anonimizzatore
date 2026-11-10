@@ -1,6 +1,6 @@
 @* Finestra di dialogo (Dialog): chiede una conferma o un dato. Escape annulla. Il focus parte dalla finestra. *@
 <div class="dialogo-velo" @onclick="Chiudi">
-    <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="@_idTitolo" tabindex="-1" @ref="_radice"
+    <div class="dialogo @(Largo ? "dialogo-largo" : null)" role="dialog" aria-modal="true" aria-labelledby="@_idTitolo" tabindex="-1" @ref="_radice"
          @onclick:stopPropagation="true" @onkeydown="Tasto">
         <h2 class="type-section-heading" id="@_idTitolo">@Titolo</h2>
         <div>@ChildContent</div>
@@ -15,6 +15,9 @@
     [Parameter, EditorRequired] public string Titolo { get; set; } = "";
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public RenderFragment? Azioni { get; set; }
+
+    /// <summary>Una finestra più larga, per contenuti con testi lunghi.</summary>
+    [Parameter] public bool Largo { get; set; }
 
     /// <summary>Chiamato con Escape o con un clic fuori dalla finestra: deve chiudere senza fare altro.</summary>
     [Parameter] public EventCallback AlChiudere { get; set; }

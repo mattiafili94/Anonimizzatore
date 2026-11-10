@@ -1,11 +1,16 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Anonimizzatore.Motore.Mappa;
+using Anonimizzatore.Motore.SchemaDb;
 
 namespace Anonimizzatore.Motore.Profili;
 
 /// <summary>Un profilo con la sua mappa, come viene caricato dal disco.</summary>
-public sealed record ProfiloSalvato(Profilo Profilo, MappaCliente Mappa);
+/// <param name="Schema">Lo schema del database importato (facoltativo): si salva insieme al profilo, cifrato.</param>
+public sealed record ProfiloSalvato(Profilo Profilo, MappaCliente Mappa)
+{
+    public SchemaDatabase? Schema { get; set; }
+}
 
 /// <summary>
 /// Salva e carica i profili: un file cifrato <c>{Id}.anonprofile</c> per cliente, con profilo e mappa insieme.
@@ -21,13 +26,15 @@ public sealed class ArchivioProfili(string cartella, IProtezioneDati protezione)
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private sealed record FileProfilo(int Versione, Profilo Profilo, DatiMappa Mappa);
+    private sealed record FileProfilo(int Versione, Profilo Profilo, DatiMappa Mappa, SchemaDatabase? Schema = null);
 
-    public void Salva(Profilo profilo, MappaCliente mappa)
+    public void Salva(ProfiloSalvato profilo) => Salva(profilo.Profilo, profilo.Mappa, profilo.Schema);
+
+    public void Salva(Profilo profilo, MappaCliente mappa, SchemaDatabase? schema = null)
     {
         Directory.CreateDirectory(cartella);
         var json = JsonSerializer.SerializeToUtf8Bytes(
-            new FileProfilo(VersioneFormato, profilo, mappa.Esporta()), OpzioniJson);
+            new FileProfilo(VersioneFormato, profilo, mappa.Esporta(), schema), OpzioniJson);
         var cifrato = protezione.Proteggi(json);
 
         // Scrittura sicura: prima un file temporaneo, poi lo scambio. Se qualcosa va storto il vecchio file resta integro.
@@ -44,7 +51,7 @@ public sealed class ArchivioProfili(string cartella, IProtezioneDati protezione)
                    ?? throw new InvalidDataException("File del profilo vuoto o non valido.");
         if (file.Versione != VersioneFormato)
             throw new InvalidDataException($"Versione del file non supportata: {file.Versione}.");
-        return new ProfiloSalvato(file.Profilo, MappaCliente.Da(file.Mappa));
+        return new ProfiloSalvato(file.Profilo, MappaCliente.Da(file.Mappa)) { Schema = file.Schema };
     }
 
     /// <summary>Tutti i profili presenti nella cartella.</summary>

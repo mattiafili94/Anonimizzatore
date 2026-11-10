@@ -5,6 +5,7 @@ using Anonimizzatore.Motore.Deanonimizzazione;
 using Anonimizzatore.Motore.Legenda;
 using Anonimizzatore.Motore.Mappa;
 using Anonimizzatore.Motore.Profili;
+using Anonimizzatore.Motore.SchemaDb;
 
 namespace Anonimizzatore.Interfaccia.Servizi;
 
@@ -102,10 +103,10 @@ public sealed class StatoApp(OpzioniApp opzioni, IProtezioneDati protezione)
         return null;
     }
 
-    public async Task<string?> CreaProfiloAsync(string nome)
+    public async Task<string?> CreaProfiloAsync(string nome, SchemaDatabase? schema = null)
     {
         if (ErroreNomeProfilo(nome) is { } errore) return errore;
-        var profilo = new ProfiloSalvato(new Profilo { Nome = nome.Trim() }, new MappaCliente());
+        var profilo = new ProfiloSalvato(new Profilo { Nome = nome.Trim() }, new MappaCliente()) { Schema = schema };
         await SalvaFileAsync(profilo);
         _profili = [.. _profili.Append(profilo).OrderBy(p => p.Profilo.Nome, NomeSql.Confronto)];
         await SelezionaAsync(profilo.Profilo.Id);
@@ -138,6 +139,15 @@ public sealed class StatoApp(OpzioniApp opzioni, IProtezioneDati protezione)
         await SalvaFileAsync(profilo);
         if (profilo.Profilo.Id == _correnteId) Anonimizzato = null;
         Cambiato?.Invoke();
+    }
+
+    /// <summary>Mette (o toglie, con <c>null</c>) lo schema del database di un profilo. Il risultato già mostrato non vale più.</summary>
+    public async Task ImpostaSchemaAsync(Guid id, SchemaDatabase? schema)
+    {
+        var profilo = _profili.FirstOrDefault(p => p.Profilo.Id == id);
+        if (profilo is null) return;
+        profilo.Schema = schema;
+        await SalvaAsync(profilo);
     }
 
     public async Task EliminaAsync(Guid id)
@@ -205,10 +215,12 @@ public sealed class StatoApp(OpzioniApp opzioni, IProtezioneDati protezione)
 
             var sessione = await Task.Run(() =>
             {
-                var risultato = AnonimizzatoreScript.Anonimizza(script, corrente.Profilo, corrente.Mappa);
-                var testo = TestoPerIA.Componi(risultato, corrente.Mappa);
-                var controllo = ControlloAntiFuga.Verifica(script, risultato, corrente.Mappa, corrente.Profilo);
-                _archivio.Salva(corrente.Profilo, corrente.Mappa); // la mappa è cresciuta: i nomi nuovi devono restare
+                var risultato = AnonimizzatoreScript.Anonimizza(script, corrente.Profilo, corrente.Mappa, corrente.Schema);
+                var testo = TestoPerIA.Componi(risultato, corrente.Mappa, corrente.Schema, corrente.Profilo);
+                var schemaAllegato = corrente.Schema is null ? null : SchemaAnonimizzato.Genera(
+                    corrente.Schema, risultato.Script.Where(s => s.Testo is not null).Select(s => s.Testo!), corrente.Profilo, corrente.Mappa);
+                var controllo = ControlloAntiFuga.Verifica(script, risultato, corrente.Mappa, corrente.Profilo, schemaAllegato);
+                _archivio.Salva(corrente); // la mappa è cresciuta: i nomi nuovi devono restare
                 return new SessioneAnonimizzazione(script, risultato, testo, controllo, corrente.Profilo.Id);
             });
             Anonimizzato = sessione;
@@ -252,7 +264,7 @@ public sealed class StatoApp(OpzioniApp opzioni, IProtezioneDati protezione)
         await _una.WaitAsync();
         try
         {
-            await Task.Run(() => _archivio.Salva(profilo.Profilo, profilo.Mappa));
+            await Task.Run(() => _archivio.Salva(profilo));
         }
         finally
         {

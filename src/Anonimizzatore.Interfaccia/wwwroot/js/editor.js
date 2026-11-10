@@ -230,6 +230,13 @@ export async function creaEditor(elemento, valore, soloLettura, riferimento, eti
     clearTimeout(attesa);
     attesa = setTimeout(() => riferimento.invokeMethodAsync('QuandoCambia', ed.getValue()), 150);
   });
+  // Ctrl+Invio: la scorciatoia dell'azione principale della pagina (Anonimizza, Ripristina).
+  ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, async () => {
+    // Prima si manda il testo com'è adesso (la digitazione ha un piccolo ritardo), poi si lancia l'azione.
+    clearTimeout(attesa);
+    await riferimento.invokeMethodAsync('QuandoCambia', ed.getValue());
+    await riferimento.invokeMethodAsync('QuandoInvio');
+  });
   editor.set(id, { tipo: 'editor', ed });
   return id;
 }

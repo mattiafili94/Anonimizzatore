@@ -23,7 +23,7 @@
                     </select>
                 </div>
                 <button type="button" class="pulsante pulsante-primario" @onclick="AnonimizzaAsync"
-                        disabled="@(!PuoAnonimizzare)" aria-busy="@(Stato.Occupato ? "true" : "false")">
+                        disabled="@(!PuoAnonimizzare)" aria-busy="@(Stato.Occupato ? "true" : "false")" title="Anonimizza (Ctrl+Invio)">
                     <Icona Nome="@(Stato.Occupato ? "loader-circle" : "shield-check")" />
                     Anonimizza
                 </button>
@@ -75,7 +75,7 @@
                     </div>
                     <EditorSql Etichetta="@($"Script {indice + 1}")" Altezza="@(Stato.Script.Count > 1 ? "14rem" : "18rem")"
                                Segnaposto="Incolla qui lo script T-SQL…"
-                               Valore="@Stato.Script[indice]" ValoreChanged="v => CambiaScript(indice, v)" />
+                               Valore="@Stato.Script[indice]" ValoreChanged="v => CambiaScript(indice, v)" AlInvio="AnonimizzaSeSiPuoAsync" />
                 </div>
             }
             <div>
@@ -217,6 +217,11 @@
         }
         _errore = null;
         Stato.Script[indice] = testo;
+    }
+
+    private async Task AnonimizzaSeSiPuoAsync()
+    {
+        if (PuoAnonimizzare) await AnonimizzaAsync();
     }
 
     private async Task AnonimizzaAsync()

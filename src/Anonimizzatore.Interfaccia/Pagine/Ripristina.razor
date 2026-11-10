@@ -22,7 +22,7 @@
                     </select>
                 </div>
                 <button type="button" class="pulsante pulsante-primario" @onclick="RipristinaAsync"
-                        disabled="@(!PuoRipristinare)" aria-busy="@(Stato.Occupato ? "true" : "false")">
+                        disabled="@(!PuoRipristinare)" aria-busy="@(Stato.Occupato ? "true" : "false")" title="Ripristina nomi (Ctrl+Invio)">
                     <Icona Nome="@(Stato.Occupato ? "loader-circle" : "rotate-ccw")" />
                     Ripristina nomi
                 </button>
@@ -59,7 +59,7 @@
                 </div>
             </div>
             <EditorSql Etichetta="Risposta dell'IA" Altezza="18rem" Segnaposto="Incolla qui la risposta dell'IA…"
-                       Valore="@Stato.RispostaIa" ValoreChanged="v => Stato.RispostaIa = v" />
+                       Valore="@Stato.RispostaIa" ValoreChanged="v => Stato.RispostaIa = v" AlInvio="RipristinaSeSiPuoAsync" />
         </section>
 
         @if (_errore is not null)
@@ -145,6 +145,11 @@
     }
 
     private void Svuota() => Stato.RispostaIa = "";
+
+    private async Task RipristinaSeSiPuoAsync()
+    {
+        if (PuoRipristinare) await RipristinaAsync();
+    }
 
     private async Task RipristinaAsync()
     {

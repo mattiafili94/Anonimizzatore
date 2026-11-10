@@ -1,6 +1,7 @@
 @page "/profili"
 @using Anonimizzatore.Motore.Mappa
 @using Anonimizzatore.Motore.Profili
+@using Anonimizzatore.Motore.SchemaDb
 @inherits PaginaConStato
 
 <PageTitle>Profili · Anonimizzatore T-SQL</PageTitle>
@@ -110,6 +111,33 @@
                     <button type="button" class="pulsante pulsante-secondario" @onclick="SalvaListeAsync" disabled="@(!ListeModificate(profilo))">
                         <Icona Nome="save" />Salva le liste
                     </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="gruppo" aria-labelledby="titolo-schema">
+            <h2 class="gruppo-titolo type-label" id="titolo-schema">Schema del database</h2>
+            <div class="riga">
+                <div class="riga-nome">
+                    @if (profilo.Schema is { } schema)
+                    {
+                        <span>@ImportaSchema.Riepilogo(schema)</span>
+                        <span class="campo-aiuto">I testi per l'IA allegano il DDL anonimizzato delle tabelle usate, con tipi, chiavi e indici.</span>
+                    }
+                    else
+                    {
+                        <span>Nessuno schema importato</span>
+                        <span class="campo-aiuto">Facoltativo: con lo schema l'IA vede i tipi esatti delle colonne e le relazioni fra le tabelle.</span>
+                    }
+                </div>
+                <div class="intestazione-azioni">
+                    <button type="button" class="pulsante pulsante-secondario" @onclick="ApriSchema">
+                        <Icona Nome="database" />@(profilo.Schema is null ? "Importa schema" : "Aggiorna schema")
+                    </button>
+                    @if (profilo.Schema is not null)
+                    {
+                        <button type="button" class="pulsante pulsante-pericolo" @onclick="() => _dialogo = Dialoghi.RimuoviSchema">Togli</button>
+                    }
                 </div>
             </div>
         </section>
@@ -239,25 +267,59 @@
 
 @if (_dialogo == Dialoghi.Nuovo)
 {
-    <Dialogo Titolo="Nuovo profilo" AlChiudere="ChiudiDialogo">
+    <Dialogo Titolo="Nuovo profilo" AlChiudere="ChiudiDialogo" Largo="true">
     <ChildContent>
-        <div class="campo">
-            <label for="nome-nuovo">Nome del profilo</label>
-            <input id="nome-nuovo" type="text" @bind="_nomeNuovo" @bind:event="oninput" @onkeydown="TastoNuovo"
-                   aria-invalid="@(_erroreNuovo is null ? null : "true")" />
-            @if (_erroreNuovo is not null)
-            {
-                <span class="campo-errore"><Icona Nome="circle-x" Dimensione="16" />@_erroreNuovo</span>
-            }
-            else
-            {
-                <span class="campo-aiuto">Per esempio il nome del cliente. Lo vedi solo tu.</span>
-            }
+        <div class="elenco-avvisi">
+            <div class="campo">
+                <label for="nome-nuovo">Nome del profilo</label>
+                <input id="nome-nuovo" type="text" @bind="_nomeNuovo" @bind:event="oninput" @onkeydown="TastoNuovo"
+                       aria-invalid="@(_erroreNuovo is null ? null : "true")" />
+                @if (_erroreNuovo is not null)
+                {
+                    <span class="campo-errore"><Icona Nome="circle-x" Dimensione="16" />@_erroreNuovo</span>
+                }
+                else
+                {
+                    <span class="campo-aiuto">Per esempio il nome del cliente. Lo vedi solo tu.</span>
+                }
+            </div>
+            <ImportaSchema EsitoChanged="e => _esitoNuovo = e" />
         </div>
     </ChildContent>
         <Azioni>
             <button type="button" class="pulsante pulsante-secondario" @onclick="ChiudiDialogo">Annulla</button>
             <button type="button" class="pulsante pulsante-primario" @onclick="CreaAsync">Crea profilo</button>
+        </Azioni>
+    </Dialogo>
+}
+else if (_dialogo == Dialoghi.Schema && Dettaglio is { } ps)
+{
+    <Dialogo Titolo="@($"Schema del database di «{ps.Profilo.Nome}»")" AlChiudere="ChiudiDialogo" Largo="true">
+    <ChildContent>
+        @if (ps.Schema is not null)
+        {
+            <p class="testo-secondario" style="margin-bottom:var(--space-12)">Quello che importi ora sostituisce lo schema attuale.</p>
+        }
+        <ImportaSchema EsitoChanged="e => _esitoSchema = e" />
+    </ChildContent>
+        <Azioni>
+            <button type="button" class="pulsante pulsante-secondario" @onclick="ChiudiDialogo">Annulla</button>
+            <button type="button" class="pulsante pulsante-primario" @onclick="SalvaSchemaAsync" disabled="@(_esitoSchema?.Schema is null)">Salva schema</button>
+        </Azioni>
+    </Dialogo>
+}
+else if (_dialogo == Dialoghi.RimuoviSchema && Dettaglio is { } pu)
+{
+    <Dialogo Titolo="@($"Togliere lo schema di «{pu.Profilo.Nome}»?")" AlChiudere="ChiudiDialogo">
+    <ChildContent>
+        <p>
+            Lo schema (@(pu.Schema is null ? "" : ImportaSchema.Riepilogo(pu.Schema))) sparisce dal profilo e i testi per l'IA non avranno più lo schema allegato.
+            Per riaverlo dovrai rifare l'import con la query.
+        </p>
+    </ChildContent>
+        <Azioni>
+            <button type="button" class="pulsante pulsante-primario" @onclick="ChiudiDialogo">Annulla</button>
+            <button type="button" class="pulsante pulsante-pericolo" @onclick="RimuoviSchemaAsync">Togli lo schema</button>
         </Azioni>
     </Dialogo>
 }
@@ -293,7 +355,32 @@ else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
 }
 
 @code {
-    private enum Dialoghi { Nessuno, Nuovo, Rigenera, Elimina }
+    private enum Dialoghi { Nessuno, Nuovo, Schema, RimuoviSchema, Rigenera, Elimina }
+
+    private RisultatoImportSchema? _esitoNuovo;
+    private RisultatoImportSchema? _esitoSchema;
+
+    private void ApriSchema()
+    {
+        _esitoSchema = null;
+        _dialogo = Dialoghi.Schema;
+    }
+
+    private async Task SalvaSchemaAsync()
+    {
+        if (Dettaglio is not { } p || _esitoSchema?.Schema is not { } schema) return;
+        _dialogo = Dialoghi.Nessuno;
+        await Stato.ImpostaSchemaAsync(p.Profilo.Id, schema);
+        Notifiche.Mostra("Schema salvato");
+    }
+
+    private async Task RimuoviSchemaAsync()
+    {
+        if (Dettaglio is not { } p) return;
+        _dialogo = Dialoghi.Nessuno;
+        await Stato.ImpostaSchemaAsync(p.Profilo.Id, null);
+        Notifiche.Mostra("Schema tolto");
+    }
 
     private sealed record GruppoRuoli(string Titolo, Ruolo[] Ruoli);
 
@@ -342,6 +429,7 @@ else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
     {
         _nomeNuovo = "";
         _erroreNuovo = null;
+        _esitoNuovo = null;
         _dialogo = Dialoghi.Nuovo;
     }
 
@@ -349,7 +437,13 @@ else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
 
     private async Task CreaAsync()
     {
-        _erroreNuovo = await Stato.CreaProfiloAsync(_nomeNuovo);
+        // Se nel campo dello schema c'è qualcosa che non si legge, non si crea il profilo di nascosto senza schema.
+        if (_esitoNuovo is { Schema: null })
+        {
+            _erroreNuovo = "Lo schema incollato non si legge: correggilo oppure svuota il campo per creare il profilo senza schema.";
+            return;
+        }
+        _erroreNuovo = await Stato.CreaProfiloAsync(_nomeNuovo, _esitoNuovo?.Schema);
         if (_erroreNuovo is null)
         {
             _dialogo = Dialoghi.Nessuno;
