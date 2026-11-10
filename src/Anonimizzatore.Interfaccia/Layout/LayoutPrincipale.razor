@@ -1,0 +1,47 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject StatoApp Stato
+@inject Tema Tema
+
+<div class="guscio">
+    <nav class="barra" aria-label="Principale">
+        <div class="barra-titolo">
+            <Icona Nome="shield-check" Dimensione="24" />
+            <span class="type-body-strong">Anonimizzatore<br />T-SQL</span>
+        </div>
+        <NavLink class="barra-voce" href="" Match="NavLinkMatch.All"><Icona Nome="shield-check" /><span>Anonimizza</span></NavLink>
+        <NavLink class="barra-voce" href="ripristina"><Icona Nome="rotate-ccw" /><span>Ripristina</span></NavLink>
+        <NavLink class="barra-voce" href="profili"><Icona Nome="users" /><span>Profili</span></NavLink>
+        <NavLink class="barra-voce" href="impostazioni"><Icona Nome="settings" /><span>Impostazioni</span></NavLink>
+        <div class="barra-fondo type-caption testo-secondario">Versione @Stato.Versione</div>
+    </nav>
+    <main class="contenuto" id="contenuto">
+        @if (Stato.Caricato)
+        {
+            @Body
+        }
+        else
+        {
+            <div class="pagina"><p class="testo-secondario" role="status">Carico i profili…</p></div>
+        }
+    </main>
+</div>
+<ZonaNotifiche />
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Tema.Cambiato += Aggiorna;
+        await Stato.CaricaAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Il tema è già applicato alla pagina; qui si allinea solo lo stato (serve JavaScript, quindi dopo il primo disegno).
+        if (firstRender) await Tema.InizializzaAsync();
+    }
+
+    private void Aggiorna() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Tema.Cambiato -= Aggiorna;
+}

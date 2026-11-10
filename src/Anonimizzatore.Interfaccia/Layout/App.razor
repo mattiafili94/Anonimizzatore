@@ -1,0 +1,16 @@
+<Router AppAssembly="typeof(App).Assembly">
+    <Found Context="rotta">
+        <RouteView RouteData="rotta" DefaultLayout="typeof(LayoutPrincipale)" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(LayoutPrincipale)">
+            <div class="pagina">
+                <div class="vuoto">
+                    <Icona Nome="search" Dimensione="24" />
+                    <h1 class="type-section-heading">Pagina non trovata</h1>
+                    <p class="testo-secondario">Usa la barra a sinistra per tornare a una schermata dell'app.</p>
+                </div>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>

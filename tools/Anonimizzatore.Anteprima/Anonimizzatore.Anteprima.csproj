@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    SOLO SVILUPPO. La stessa interfaccia dell'app, ospitata in un browser: serve per vederla e provarla (e farle le
+    schermate) senza aprire la finestra WPF. Non si distribuisce e non c'entra con la cartella portabile.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Anonimizzatore.Interfaccia\Anonimizzatore.Interfaccia.csproj" />
+  </ItemGroup>
+
+</Project>

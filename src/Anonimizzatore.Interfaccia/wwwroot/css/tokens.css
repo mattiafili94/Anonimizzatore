@@ -1,0 +1,277 @@
+/*
+ * Token di UI Top (Arco/design-system/tokens.json), con i valori di default del design system.
+ * Derivato dal tokens.css generato di Arco: tolti i colori del bersaglio e degli utenti (non servono qui) e rimessi il blu
+ * di default e i suoi stati al posto del blu della compagnia. Per cambiarli, si cambiano qui e si controllano i tre temi.
+ */
+
+:root {
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --radius-control: 10px;
+  --radius-surface: 16px;
+  --radius-overlay: 22px;
+  --radius-full: 999px;
+  --shadow-floating: 0 1px 2px rgba(20,22,25,0.08), 0 4px 12px rgba(20,22,25,0.08);
+  --shadow-overlay: 0 2px 6px rgba(20,22,25,0.08), 0 16px 40px rgba(20,22,25,0.14);
+  --duration-instant: 100ms;
+  --duration-fast: 160ms;
+  --duration-standard: 240ms;
+  --duration-expressive: 380ms;
+  --duration-spring-control: 350ms;
+  --duration-spring-surface: 450ms;
+  --duration-spring-expressive: 510ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  --ease-spring-control: linear(0, 0.103, 0.292, 0.478, 0.631, 0.747, 0.83, 0.886, 0.926, 0.952, 0.969, 0.98, 0.987, 0.992, 0.995, 0.997, 0.998, 0.999, 1);
+  --ease-spring-surface: linear(0, 0.1, 0.294, 0.495, 0.666, 0.796, 0.886, 0.944, 0.978, 0.997, 1.005, 1.008, 1.008, 1.007, 1.005, 1.003, 1.002, 1.001, 1);
+  --ease-spring-expressive: linear(0, 0.098, 0.293, 0.498, 0.67, 0.802, 0.894, 0.951, 0.984, 1.002, 1.009, 1.011, 1.01, 1.008, 1.005, 1.004, 1.002, 1.001, 1);
+  --icon-compact: 16px;
+  --icon-standard: 20px;
+  --icon-prominent: 24px;
+  --icon-stroke: 1.75;
+  --control-compact: 32px;
+  --control-standard: 44px;
+  --control-touch: 48px;
+  --measure: 68ch;
+  --shift-axis: 32px;
+  --z-base: 0;
+  --z-sticky: 100;
+  --z-dropdown: 200;
+  --z-overlay: 300;
+  --z-toast: 400;
+  --opacity-disabled: 0.5;
+  --page-gutter: clamp(16px, 4vw, 48px);
+  --content-max: 1120px;
+  --pane-list: 360px;
+  --pane-side: 300px;
+  --rail: 180px;
+  --scale-press: 0.97;
+  --scale-popover: 0.96;
+  --scale-page: 0.98;
+  --scale-back: 0.92;
+  --scale-lift: 1.02;
+  --font-sans: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --background-canvas: #f5f5f5;
+  --background-surface: #ffffff;
+  --background-elevated: #ffffff;
+  --background-watch: #000000;
+  --text-primary: #1a1c1f;
+  --text-secondary: #5a5f66;
+  --text-disabled: #9a9ea4;
+  --border-subtle: #e2e2df;
+  --border-group: rgba(0,0,0,0);
+  --border-strong: #80858b;
+  --accent-default: #1d5bd6;
+  --accent-hover: #174cb8;
+  --accent-pressed: #123d96;
+  --on-accent: #ffffff;
+  --status-success: #1a7f4b;
+  --status-warning: #8f5a00;
+  --status-error: #c0362c;
+  --status-info: #2a6592;
+  --focus-ring: #1d5bd6;
+  --state-hover: rgba(26,28,31,0.06);
+  --state-pressed: rgba(26,28,31,0.1);
+  --state-selected: #e4ecfb;
+  --status-success-subtle: #eef8f2;
+  --status-warning-subtle: #f8ecd6;
+  --status-error-subtle: #fbe6e3;
+  --status-info-subtle: #e2eef6;
+  --scrim: rgba(10,12,14,0.5);
+  --chart-1: #1d5bd6;
+  --chart-2: #b3541e;
+  --chart-3: #0f7a6c;
+  --chart-4: #8a3d8f;
+  --chart-5: #5a5f66;
+  --chart-grid: #e2e2df;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --background-canvas: #131416;
+    --background-surface: #1b1d20;
+    --background-elevated: #25282c;
+    --background-watch: #000000;
+    --text-primary: #eceef0;
+    --text-secondary: #a4a9b0;
+    --text-disabled: #6b7077;
+    --border-subtle: #2c2f34;
+    --border-group: rgba(0,0,0,0);
+    --border-strong: #72777e;
+    --accent-default: #7aa7ff;
+    --accent-hover: #94b8ff;
+    --accent-pressed: #6694ee;
+    --on-accent: #0c1a33;
+    --status-success: #5fcf94;
+    --status-warning: #f0b34a;
+    --status-error: #ff8f85;
+    --status-info: #7fbdea;
+    --focus-ring: #9cc0ff;
+    --state-hover: rgba(236,238,240,0.07);
+    --state-pressed: rgba(236,238,240,0.12);
+    --state-selected: #1c2a45;
+    --status-success-subtle: #15291f;
+    --status-warning-subtle: #2e2410;
+    --status-error-subtle: #33191a;
+    --status-info-subtle: #14262f;
+    --scrim: rgba(0,0,0,0.6);
+    --chart-1: #7aa7ff;
+    --chart-2: #f0a36b;
+    --chart-3: #5fcfc0;
+    --chart-4: #d79bdb;
+    --chart-5: #a4a9b0;
+    --chart-grid: #2c2f34;
+    --shadow-floating: 0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.35);
+    --shadow-overlay: 0 2px 6px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --background-canvas: #131416;
+  --background-surface: #1b1d20;
+  --background-elevated: #25282c;
+  --background-watch: #000000;
+  --text-primary: #eceef0;
+  --text-secondary: #a4a9b0;
+  --text-disabled: #6b7077;
+  --border-subtle: #2c2f34;
+  --border-group: rgba(0,0,0,0);
+  --border-strong: #72777e;
+  --accent-default: #7aa7ff;
+  --accent-hover: #94b8ff;
+  --accent-pressed: #6694ee;
+  --on-accent: #0c1a33;
+  --status-success: #5fcf94;
+  --status-warning: #f0b34a;
+  --status-error: #ff8f85;
+  --status-info: #7fbdea;
+  --focus-ring: #9cc0ff;
+  --state-hover: rgba(236,238,240,0.07);
+  --state-pressed: rgba(236,238,240,0.12);
+  --state-selected: #1c2a45;
+  --status-success-subtle: #15291f;
+  --status-warning-subtle: #2e2410;
+  --status-error-subtle: #33191a;
+  --status-info-subtle: #14262f;
+  --scrim: rgba(0,0,0,0.6);
+  --chart-1: #7aa7ff;
+  --chart-2: #f0a36b;
+  --chart-3: #5fcfc0;
+  --chart-4: #d79bdb;
+  --chart-5: #a4a9b0;
+  --chart-grid: #2c2f34;
+  --shadow-floating: 0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.35);
+  --shadow-overlay: 0 2px 6px rgba(0,0,0,0.45), 0 16px 40px rgba(0,0,0,0.5);
+}
+
+:root[data-theme='contrast'] {
+  color-scheme: light;
+  --background-canvas: #ffffff;
+  --background-surface: #ffffff;
+  --background-elevated: #ffffff;
+  --background-watch: #000000;
+  --text-primary: #1a1c1f;
+  --text-secondary: #3a3e44;
+  --text-disabled: #6b7076;
+  --border-subtle: #6b7076;
+  --border-group: #6b7076;
+  --border-strong: #1a1c1f;
+  --accent-default: #0f3fa8;
+  --accent-hover: #0b2f80;
+  --accent-pressed: #08235f;
+  --on-accent: #ffffff;
+  --status-success: #0f5c35;
+  --status-warning: #6b4300;
+  --status-error: #96231b;
+  --status-info: #1c4a6e;
+  --focus-ring: #0f3fa8;
+  --state-hover: rgba(26,28,31,0.1);
+  --state-pressed: rgba(26,28,31,0.16);
+  --state-selected: #d5e2fa;
+  --status-success-subtle: #eef8f2;
+  --status-warning-subtle: #f8ecd6;
+  --status-error-subtle: #fcebe9;
+  --status-info-subtle: #e2eef6;
+  --scrim: rgba(10,12,14,0.7);
+  --chart-1: #1d5bd6;
+  --chart-2: #b3541e;
+  --chart-3: #0f7a6c;
+  --chart-4: #8a3d8f;
+  --chart-5: #5a5f66;
+  --chart-grid: #6b7076;
+}
+
+.type-display {
+  font-family: var(--font-sans);
+  font-size: 2.75rem;
+  line-height: 3rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.type-page-title {
+  font-family: var(--font-sans);
+  font-size: 2rem;
+  line-height: 2.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.type-section-heading {
+  font-family: var(--font-sans);
+  font-size: 1.25rem;
+  line-height: 1.625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.type-body {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 400;
+}
+
+.type-body-strong {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+
+.type-label {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-weight: 500;
+}
+
+.type-caption {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+}
+
+.type-numeric {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}

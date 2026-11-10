@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anonimizzatore T-SQL</title>
+    <base href="/" />
+    <script>
+        // Il tema scelto si applica prima del disegno: niente lampo del tema sbagliato.
+        try { var t = localStorage.getItem('anonimizzatore.tema'); if (t && t !== 'sistema') document.documentElement.setAttribute('data-theme', t); } catch (e) { }
+    </script>
+    <link rel="stylesheet" href="_content/Anonimizzatore.Interfaccia/css/tokens.css" />
+    <link rel="stylesheet" href="_content/Anonimizzatore.Interfaccia/css/base.css" />
+    <link rel="stylesheet" href="_content/Anonimizzatore.Interfaccia/css/app.css" />
+</head>
+<body>
+    <div id="app">Carico…</div>
+    <div id="blazor-error-ui" style="display:none">
+        Si è verificato un errore. <a href="" class="reload">Ricarica</a>
+    </div>
+    <script src="_framework/blazor.webview.js"></script>
+</body>
+</html>

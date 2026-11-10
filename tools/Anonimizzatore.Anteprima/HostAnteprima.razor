@@ -1,0 +1,26 @@
+@using Anonimizzatore.Interfaccia.Layout
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <title>Anonimizzatore T-SQL (anteprima)</title>
+    <script>
+        // Il tema scelto si applica prima del disegno: niente lampo del tema sbagliato.
+        try { var t = localStorage.getItem('anonimizzatore.tema'); if (t && t !== 'sistema') document.documentElement.setAttribute('data-theme', t); } catch (e) { }
+    </script>
+    <link rel="stylesheet" href="_content/Anonimizzatore.Interfaccia/css/tokens.css" />
+    <link rel="stylesheet" href="_content/Anonimizzatore.Interfaccia/css/base.css" />
+    <link rel="stylesheet" href="_content/Anonimizzatore.Interfaccia/css/app.css" />
+    <HeadOutlet @rendermode="Modo" />
+</head>
+<body>
+    <App @rendermode="Modo" />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>
+
+@code {
+    private static readonly InteractiveServerRenderMode Modo = new(prerender: false);
+}

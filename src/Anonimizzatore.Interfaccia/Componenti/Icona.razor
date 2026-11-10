@@ -1,0 +1,17 @@
+@* Un'icona Lucide (contorno, 24x24, tratto 1,75) nel colore del testo. Senza etichetta è decorativa e lo screen reader la salta. *@
+@if (IconeLucide.Contenuto.TryGetValue(Nome, out var contenuto))
+{
+    <svg class="icona" width="@Dimensione" height="@Dimensione" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+         aria-hidden="@(Etichetta is null ? "true" : null)" role="@(Etichetta is null ? null : "img")" aria-label="@Etichetta">@((MarkupString)contenuto)</svg>
+}
+
+@code {
+    /// <summary>Il nome Lucide dell'icona (es. <c>shield-check</c>): solo quelle in IconeLucide.g.cs.</summary>
+    [Parameter, EditorRequired] public string Nome { get; set; } = "";
+
+    [Parameter] public int Dimensione { get; set; } = 20;
+
+    /// <summary>Se l'icona da sola ha un significato.</summary>
+    [Parameter] public string? Etichetta { get; set; }
+}

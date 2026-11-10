@@ -1,0 +1,86 @@
+@page "/impostazioni"
+@inherits PaginaConStato
+@inject Tema Tema
+
+<PageTitle>Impostazioni · Anonimizzatore T-SQL</PageTitle>
+
+<div class="pagina">
+    <header class="intestazione">
+        <div class="intestazione-testo">
+            <h1 class="type-page-title">Impostazioni</h1>
+        </div>
+    </header>
+
+    @if (Stato.Anteprima)
+    {
+        <Segnalazione Tipo="TipoSegnalazione.Attenzione" Titolo="Anteprima di sviluppo">
+            Stai vedendo l'interfaccia in un browser, solo per provarla: i profili qui non sono cifrati. L'app vera li cifra con il tuo utente di Windows.
+        </Segnalazione>
+    }
+
+    <section class="gruppo" aria-labelledby="titolo-aspetto">
+        <h2 class="gruppo-titolo type-label" id="titolo-aspetto">Aspetto</h2>
+        <div class="riga">
+            <div class="riga-nome">
+                <span>Tema</span>
+                <span class="campo-aiuto">«Come il sistema» segue il tema di Windows.</span>
+            </div>
+            <Segmenti Etichetta="Tema" Voci="Temi" Valore="@Tema.Scelta.ToString()" ValoreChanged="ScegliTemaAsync" />
+        </div>
+    </section>
+
+    <section class="gruppo" aria-labelledby="titolo-info">
+        <h2 class="gruppo-titolo type-label" id="titolo-info">Informazioni</h2>
+        <div class="riga">
+            <span>Versione</span>
+            <span class="riga-valore numerico">@Stato.Versione</span>
+        </div>
+        <div class="riga">
+            <div class="riga-nome">
+                <span>Cartella dei dati</span>
+                <span class="campo-aiuto">Profili e impostazioni stanno qui, fuori dalla cartella dell'app: aggiornare l'app non li tocca.</span>
+            </div>
+            <span class="riga-valore codice">@Stato.CartellaDati</span>
+        </div>
+    </section>
+
+    <section class="gruppo" aria-labelledby="titolo-riservatezza">
+        <h2 class="gruppo-titolo type-label" id="titolo-riservatezza">Riservatezza</h2>
+        <div class="gruppo-corpo">
+            <p>
+                Tutto avviene su questo PC: l'app non si collega a Internet e non invia nulla. Gli script entrano e il testo anonimizzato
+                esce solo quando premi Copia.
+            </p>
+            <p>
+                Le mappe dei nomi sono salvate cifrate con il tuo utente di Windows. Su un altro PC, o con un altro utente, non si aprono.
+            </p>
+        </div>
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<Segmenti.Voce> Temi { get; } =
+    [
+        new(nameof(SceltaTema.Sistema), Tema.Etichetta(SceltaTema.Sistema)),
+        new(nameof(SceltaTema.Chiaro), Tema.Etichetta(SceltaTema.Chiaro)),
+        new(nameof(SceltaTema.Scuro), Tema.Etichetta(SceltaTema.Scuro)),
+        new(nameof(SceltaTema.AltoContrasto), Tema.Etichetta(SceltaTema.AltoContrasto)),
+    ];
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Tema.Cambiato += Aggiorna;
+    }
+
+    private void Aggiorna() => _ = InvokeAsync(StateHasChanged);
+
+    private Task ScegliTemaAsync(string valore) =>
+        Enum.TryParse<SceltaTema>(valore, out var tema) ? Tema.ImpostaAsync(tema) : Task.CompletedTask;
+
+    public override void Dispose()
+    {
+        Tema.Cambiato -= Aggiorna;
+        base.Dispose();
+    }
+}

@@ -1,0 +1,19 @@
+@if (Voci.Count == 0)
+{
+    <Segnalazione Tipo="TipoSegnalazione.Successo" Titolo="@TitoloVuoto">@TestoVuoto</Segnalazione>
+}
+else
+{
+    <div class="elenco-avvisi">
+        @foreach (var voce in Voci)
+        {
+            <Segnalazione Tipo="voce.Tipo" Posizione="@voce.Posizione">@voce.Testo</Segnalazione>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<VoceAvviso> Voci { get; set; } = [];
+    [Parameter] public string TitoloVuoto { get; set; } = "Nessun avviso";
+    [Parameter] public string? TestoVuoto { get; set; }
+}

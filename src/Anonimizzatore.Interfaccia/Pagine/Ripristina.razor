@@ -1,0 +1,175 @@
+@page "/ripristina"
+@inherits PaginaConStato
+
+<PageTitle>Ripristina · Anonimizzatore T-SQL</PageTitle>
+
+<div class="pagina pagina-larga">
+    <header class="intestazione">
+        <div class="intestazione-testo">
+            <h1 class="type-page-title">Ripristina</h1>
+            <p class="testo-secondario">Incolla la risposta intera dell'IA, testo e codice: i nomi anonimi tornano quelli veri.</p>
+        </div>
+        @if (Stato.Profili.Count > 0)
+        {
+            <div class="intestazione-azioni">
+                <div class="campo">
+                    <label for="profilo-ripristino">Profilo</label>
+                    <select id="profilo-ripristino" value="@Stato.Corrente?.Profilo.Id" @onchange="CambiaProfilo">
+                        @foreach (var p in Stato.Profili)
+                        {
+                            <option value="@p.Profilo.Id">@p.Profilo.Nome</option>
+                        }
+                    </select>
+                </div>
+                <button type="button" class="pulsante pulsante-primario" @onclick="RipristinaAsync"
+                        disabled="@(!PuoRipristinare)" aria-busy="@(Stato.Occupato ? "true" : "false")">
+                    <Icona Nome="@(Stato.Occupato ? "loader-circle" : "rotate-ccw")" />
+                    Ripristina nomi
+                </button>
+            </div>
+        }
+    </header>
+
+    @if (Stato.Profili.Count == 0)
+    {
+        <div class="vuoto">
+            <Icona Nome="users" Dimensione="24" />
+            <h2 class="type-section-heading">Serve un profilo</h2>
+            <p class="testo-secondario">
+                I nomi veri stanno nella mappa del profilo con cui hai anonimizzato. Crea o scegli il profilo giusto.
+            </p>
+            <a class="pulsante pulsante-primario" href="profili"><Icona Nome="plus" />Vai ai profili</a>
+        </div>
+    }
+    else
+    {
+        <section aria-label="Risposta dell'IA" class="script-blocco">
+            <div class="script-testata">
+                <h2 class="type-label">Risposta dell'IA</h2>
+                <div class="intestazione-azioni">
+                    <button type="button" class="pulsante pulsante-testo pulsante-compatto" @onclick="IncollaAsync">
+                        <Icona Nome="clipboard-paste" Dimensione="16" />Incolla dagli appunti
+                    </button>
+                    @if (!string.IsNullOrEmpty(Stato.RispostaIa))
+                    {
+                        <button type="button" class="pulsante pulsante-testo pulsante-compatto" @onclick="Svuota">
+                            <Icona Nome="trash-2" Dimensione="16" />Svuota
+                        </button>
+                    }
+                </div>
+            </div>
+            <EditorSql Etichetta="Risposta dell'IA" Altezza="18rem" Segnaposto="Incolla qui la risposta dell'IA…"
+                       Valore="@Stato.RispostaIa" ValoreChanged="v => Stato.RispostaIa = v" />
+        </section>
+
+        @if (_errore is not null)
+        {
+            <Segnalazione Tipo="TipoSegnalazione.Errore" Titolo="Non sono riuscito a ripristinare">@_errore</Segnalazione>
+        }
+
+        @if (Stato.Ripristinato is { } r)
+        {
+            <section aria-label="Risultato" class="elenco-avvisi">
+                <div class="intestazione">
+                    <Segmenti Etichetta="Vista del risultato" Voci="Viste" Valore="@_vista" ValoreChanged="v => _vista = v" />
+                    <div class="intestazione-azioni">
+                        <span class="testo-secondario numerico">@Frase(r.Risultato.Sostituzioni)</span>
+                        <button type="button" class="pulsante pulsante-primario" @onclick="CopiaAsync"
+                                disabled="@(!Stato.RipristinatoAggiornato)">
+                            <Icona Nome="copy" />Copia risultato
+                        </button>
+                    </div>
+                </div>
+
+                @if (!Stato.RipristinatoAggiornato)
+                {
+                    <Segnalazione Tipo="TipoSegnalazione.Attenzione" Titolo="Il risultato non è aggiornato">
+                        Hai cambiato la risposta o il profilo: premi Ripristina nomi per rifarlo.
+                    </Segnalazione>
+                }
+                @if (_erroreCopia is not null)
+                {
+                    <Segnalazione Tipo="TipoSegnalazione.Errore" Titolo="Copia non riuscita">@_erroreCopia</Segnalazione>
+                }
+
+                @if (_vista == "confronto")
+                {
+                    <ConfrontoSql Etichetta="Confronto della risposta" Originale="@r.Risposta" Modificato="@r.Risultato.Testo"
+                                  EtichettaOriginale="Risposta dell'IA" EtichettaModificato="Con i nomi veri" Altezza="28rem" />
+                }
+                else if (_vista == "testo")
+                {
+                    <EditorSql Etichetta="Risposta con i nomi veri" SoloLettura="true" Altezza="28rem" Valore="@r.Risultato.Testo" />
+                }
+                else
+                {
+                    <ElencoAvvisi Voci="@VociAvviso(r)" TitoloVuoto="È tornato tutto"
+                                  TestoVuoto="Ogni nome anonimo ha trovato il suo nome vero." />
+                }
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private string _vista = "testo";
+    private string? _errore;
+    private string? _erroreCopia;
+
+    private bool PuoRipristinare => Stato.Corrente is not null && !string.IsNullOrWhiteSpace(Stato.RispostaIa) && !Stato.Occupato;
+
+    private IReadOnlyList<Segmenti.Voce> Viste =>
+    [
+        new("testo", "Risposta ripristinata"),
+        new("confronto", "Confronto"),
+        new("avvisi", "Avvisi", Stato.Ripristinato is { } r ? VociAvviso(r).Count : 0),
+    ];
+
+    private static string Frase(int n) => n == 1 ? "1 nome ripristinato" : $"{n} nomi ripristinati";
+
+    private async Task CambiaProfilo(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id)) await Stato.SelezionaAsync(id);
+    }
+
+    private async Task IncollaAsync()
+    {
+        var testo = await Appunti.IncollaAsync();
+        if (testo is null)
+        {
+            _errore = "Non riesco a leggere gli appunti: incolla direttamente nell'editor con Ctrl+V.";
+            return;
+        }
+        _errore = null;
+        Stato.RispostaIa = testo;
+    }
+
+    private void Svuota() => Stato.RispostaIa = "";
+
+    private async Task RipristinaAsync()
+    {
+        _errore = null;
+        _erroreCopia = null;
+        try
+        {
+            await Stato.RipristinaAsync();
+            _vista = "testo";
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            _errore = "Si è verificato un errore imprevisto: " + e.Message;
+        }
+    }
+
+    private async Task CopiaAsync()
+    {
+        if (Stato.Ripristinato is not { } r) return;
+        _erroreCopia = null;
+        if (await Appunti.CopiaAsync(r.Risultato.Testo)) Notifiche.Mostra("Risultato copiato");
+        else _erroreCopia = "Il sistema non ha permesso di scrivere negli appunti. Seleziona il testo e copialo con Ctrl+C.";
+    }
+
+    private static List<VoceAvviso> VociAvviso(SessioneRipristino r) =>
+        [.. r.Risultato.Avvisi.Select(a => new VoceAvviso(
+            TipoSegnalazione.Attenzione, a.Messaggio, a.Riga > 0 ? $"Riga {a.Riga} della risposta" : null))];
+}

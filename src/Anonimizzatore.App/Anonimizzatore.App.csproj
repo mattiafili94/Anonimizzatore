@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Anonimizzatore.App</RootNamespace>
+    <AssemblyName>Anonimizzatore</AssemblyName>
+    <!-- Il numero di versione che si vede nell'app (Impostazioni e barra laterale). -->
+    <Version>0.1.0</Version>
+    <Product>Anonimizzatore T-SQL</Product>
+    <Description>Anonimizza script T-SQL da passare all'IA e rimette i nomi veri nelle risposte. Funziona offline.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.20" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Anonimizzatore.Interfaccia\Anonimizzatore.Interfaccia.csproj" />
+  </ItemGroup>
+
+</Project>

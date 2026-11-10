@@ -1,0 +1,36 @@
+@* Controllo segmentato (SegmentedControl): una scelta tra poche voci, tutte visibili. Frecce destra/sinistra per spostarsi. *@
+<div class="segmenti" role="radiogroup" aria-label="@Etichetta">
+    @foreach (var voce in Voci)
+    {
+        var attiva = voce.Valore == Valore;
+        var valore = voce.Valore;
+        <button type="button" class="segmento" role="radio" aria-checked="@(attiva ? "true" : "false")"
+                tabindex="@(attiva ? 0 : -1)" @onclick="() => Scegli(valore)" @onkeydown="e => Tasto(e, valore)">
+            @voce.Etichetta
+            @if (voce.Numero > 0)
+            {
+                <span class="segmento-numero">@voce.Numero</span>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    public sealed record Voce(string Valore, string Etichetta, int Numero = 0);
+
+    [Parameter, EditorRequired] public IReadOnlyList<Voce> Voci { get; set; } = [];
+    [Parameter] public string Valore { get; set; } = "";
+    [Parameter] public EventCallback<string> ValoreChanged { get; set; }
+    [Parameter] public string? Etichetta { get; set; }
+
+    private Task Scegli(string valore) => ValoreChanged.InvokeAsync(valore);
+
+    private Task Tasto(KeyboardEventArgs e, string corrente)
+    {
+        var passo = e.Key switch { "ArrowRight" or "ArrowDown" => 1, "ArrowLeft" or "ArrowUp" => -1, _ => 0 };
+        if (passo == 0) return Task.CompletedTask;
+        var indice = Voci.ToList().FindIndex(v => v.Valore == corrente);
+        var prossimo = Voci[(indice + passo + Voci.Count) % Voci.Count];
+        return Scegli(prossimo.Valore);
+    }
+}

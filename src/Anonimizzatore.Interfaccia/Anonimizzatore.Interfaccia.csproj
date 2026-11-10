@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Anonimizzatore.Interfaccia</RootNamespace>
+    <!-- L'interfaccia non sa nulla di WPF: la ospita l'app (BlazorWebView) o l'anteprima nel browser. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Anonimizzatore.Motore\Anonimizzatore.Motore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Gli strumenti per preparare Monaco e le icone (npm) non fanno parte del progetto compilato. -->
+    <Content Remove="risorse-esterne\**" />
+    <None Include="risorse-esterne\**" Exclude="risorse-esterne\node_modules\**" />
+  </ItemGroup>
+
+</Project>

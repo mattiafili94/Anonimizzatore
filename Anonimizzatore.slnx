@@ -1,8 +1,14 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Anonimizzatore.App/Anonimizzatore.App.csproj" />
+    <Project Path="src/Anonimizzatore.Interfaccia/Anonimizzatore.Interfaccia.csproj" />
     <Project Path="src/Anonimizzatore.Motore/Anonimizzatore.Motore.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Anonimizzatore.Interfaccia.Test/Anonimizzatore.Interfaccia.Test.csproj" />
     <Project Path="tests/Anonimizzatore.Motore.Test/Anonimizzatore.Motore.Test.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Anonimizzatore.Anteprima/Anonimizzatore.Anteprima.csproj" />
   </Folder>
 </Solution>

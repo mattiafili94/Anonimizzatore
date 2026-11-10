@@ -242,7 +242,39 @@ realistici di Mattia, che li mette in `prove-locali/` (esclusa da git); per ogni
 `AnonimizzatoreScript.Anonimizza` → `TestoPerIA.Componi` → `ControlloAntiFuga.Verifica` (all'andata) e `DeAnonimizzatore.DeAnonimizza`
 (al ritorno, con `Avvisi`); profili con `ArchivioProfili` (DPAPI), `Profilo` (matrice, whitelist, blacklist), `MappaCliente`
 (nomi stabili, "rigenera nomi" = `Rigenera()`); schema importato = `SchemaDatabase` (da riempire con la query di import).
-- **Prossimo passo**: tappa 14 (script reali di Mattia in `prove-locali/`), poi la fase 2.
+
+
+
+## Stato della fase 2 — interfaccia (10/11/2026)
+
+Piano: [docs/piano-fase-2.md](docs/piano-fase-2.md). Mattia ha deciso (10/11/2026) di fare la **tappa 14 alla fine**, dopo l'interfaccia.
+Fatto, con 588 test verdi (577 motore + 11 interfaccia):
+- **Progetti**: `src/Anonimizzatore.Interfaccia` (libreria Razor: servizi, componenti, pagine, CSS, Monaco, icone), `src/Anonimizzatore.App`
+  (WPF + `BlazorWebView`, eseguibile `Anonimizzatore.exe`, target `net10.0-windows10.0.17763.0`: serve per la libreria Windows SDK di
+  WebView2, senza crasha all'avvio), `tools/Anonimizzatore.Anteprima` (solo sviluppo: la stessa interfaccia in un browser, profili in una
+  cartella temporanea e **non cifrati**), `tests/Anonimizzatore.Interfaccia.Test` (test di `StatoApp`).
+- **Provare l'interfaccia**: `dotnet run --project tools/Anonimizzatore.Anteprima --launch-profile http` e aprire http://localhost:5051
+  (si può guardare nel browser pane e fare screenshot). L'app vera: `dotnet run --project src/Anonimizzatore.App`. L'app WPF si è provata
+  solo avviandola e leggendo la pagina via debug remoto di WebView2 (si carica, versione 0.1.0 visibile): non si possono fare screenshot
+  della finestra.
+- **Risorse esterne nella repo** (chi clona non ha bisogno di Node): Monaco 0.52.2 (formato AMD, versioni più nuove no) e icone Lucide
+  in `src/Anonimizzatore.Interfaccia/wwwroot/lib` e `Componenti/IconeLucide.g.cs`, generati da `risorse-esterne/prepara.mjs`
+  (`npm install` poi `npm run prepara` dentro `risorse-esterne/`; `node_modules` è ignorato da git). Nessuna chiamata di rete.
+- **Schermate**: Anonimizza (profilo, uno o più editor, confronto affiancato / testo per l'IA / avvisi, copia con dialogo di conferma se
+  l'anti-fuga trova un `Bloccante`, risultato "non aggiornato" se cambiano script o regole), Ripristina (risposta dell'IA, risultato,
+  confronto, avvisi del report), Profili (elenco, nuovo, rinomina, matrice per tipo con salvataggio immediato, whitelist/blacklist,
+  tabella dei nomi assegnati con ricerca, rigenera nomi, elimina con conferma che nomina il profilo), Impostazioni (tema chiaro/scuro/
+  alto contrasto/sistema, versione, cartella dei dati `%APPDATA%\Anonimizzatore`).
+- **Struttura**: `StatoApp` (servizio scoped) tiene profili, profilo in uso (`impostazioni.json`) e il lavoro in corso; chiama il motore su
+  `Task.Run` e salva la mappa dopo ogni Anonimizza. Le pagine ereditano `PaginaConStato` (si ridisegnano su `StatoApp.Cambiato`).
+  Design UI Top: token in `wwwroot/css/tokens.css`, classi in italiano in `app.css`. Gli editor Monaco prendono i colori dalle variabili CSS.
+- **Trucchi da ricordare**: in una grammatica Monarch `@nome` è un riferimento a un attributo (una chiocciola vera si scrive `@@`); in
+  Blazor, un componente con `RenderFragment` con nome (`<Azioni>`) vuole anche `<ChildContent>` esplicito; la matrice per
+  `Cartella`/`File`/`Ip`/`Email` non è nell'interfaccia perché il motore le anonimizza sempre.
+- **Non ancora fatto**: 2E (schema del database: query di import, incolla del risultato → `SchemaDatabase`; il motore lo accetta già,
+  `StatoApp` e le pagine non lo usano ancora), 2F (scorciatoie da tastiera es. Ctrl+Invio, rifinitura di accessibilità con prova nei tre
+  temi, test dei componenti con bUnit), fase 3 (cartella portabile self-contained, numero di versione da pubblicazione).
+- **Prossimo passo**: 2E e 2F, poi fase 3, poi tappa 14 (script reali in `prove-locali/`).
 
 ## Regole fisse (repo pubblica)
 

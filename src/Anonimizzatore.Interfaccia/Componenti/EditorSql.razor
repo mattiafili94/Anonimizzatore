@@ -1,0 +1,86 @@
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+@* Un editor Monaco con evidenziazione T-SQL. Tutto locale: vedi wwwroot/js/editor.js. *@
+<div class="editor-riquadro" style="height:@Altezza" role="group" aria-label="@Etichetta">
+    <div @ref="_elemento" class="editor-sql"></div>
+    @if (string.IsNullOrEmpty(_ultimo) && !string.IsNullOrEmpty(Segnaposto))
+    {
+        <div class="editor-segnaposto" aria-hidden="true">@Segnaposto</div>
+    }
+</div>
+
+@code {
+    private ElementReference _elemento;
+    private IJSObjectReference? _modulo;
+    private DotNetObjectReference<EditorSql>? _riferimento;
+    private int _id;
+    private string _ultimo = "";
+    private bool _eliminato;
+
+    [Parameter] public string Valore { get; set; } = "";
+    [Parameter] public EventCallback<string> ValoreChanged { get; set; }
+    [Parameter] public bool SoloLettura { get; set; }
+    [Parameter] public string Altezza { get; set; } = "16rem";
+
+    /// <summary>Il nome dell'editor per chi usa uno screen reader (es. "Script 1").</summary>
+    [Parameter, EditorRequired] public string Etichetta { get; set; } = "";
+
+    /// <summary>Testo grigio mostrato finché l'editor è vuoto.</summary>
+    [Parameter] public string? Segnaposto { get; set; }
+
+    protected override void OnInitialized() => _ultimo = Valore ?? "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_eliminato) return;
+        if (firstRender)
+        {
+            _modulo = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Anonimizzatore.Interfaccia/js/editor.js");
+            _riferimento = DotNetObjectReference.Create(this);
+            _id = await _modulo.InvokeAsync<int>("creaEditor", _elemento, Valore ?? "", SoloLettura, _riferimento, Etichetta);
+            if (_eliminato) await Libera();
+            return;
+        }
+
+        // Il valore è cambiato da fuori (per esempio "Incolla" o un nuovo risultato): si aggiorna l'editor.
+        if (_modulo is not null && _id != 0 && (Valore ?? "") != _ultimo)
+        {
+            _ultimo = Valore ?? "";
+            await _modulo.InvokeVoidAsync("impostaValore", _id, _ultimo);
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Chiamato da JavaScript quando l'utente scrive.</summary>
+    [JSInvokable]
+    public async Task QuandoCambia(string valore)
+    {
+        if (valore == _ultimo) return;
+        _ultimo = valore;
+        if (!SoloLettura) await ValoreChanged.InvokeAsync(valore);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _eliminato = true;
+        await Libera();
+    }
+
+    private async Task Libera()
+    {
+        try
+        {
+            if (_modulo is not null && _id != 0) await _modulo.InvokeVoidAsync("distruggi", _id);
+            if (_modulo is not null) await _modulo.DisposeAsync();
+        }
+        catch (Exception e) when (e is JSDisconnectedException or JSException or InvalidOperationException or TaskCanceledException)
+        {
+            // la pagina si sta chiudendo: non c'è più nulla da liberare
+        }
+        _modulo = null;
+        _riferimento?.Dispose();
+        _riferimento = null;
+    }
+}

@@ -1,0 +1,20 @@
+@implements IDisposable
+@inject Notifiche Notifiche
+
+<div class="toast-zona" role="status" aria-live="polite">
+    @foreach (var n in Notifiche.Elenco)
+    {
+        <div class="toast" @key="n.Id">
+            <Icona Nome="circle-check" />
+            <span>@n.Testo</span>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Notifiche.Cambiato += Aggiorna;
+
+    private void Aggiorna() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Notifiche.Cambiato -= Aggiorna;
+}

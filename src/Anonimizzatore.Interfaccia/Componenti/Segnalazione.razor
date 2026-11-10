@@ -1,0 +1,47 @@
+@* Un avviso nel testo della pagina (Notice). Gli errori restano a schermo finché non si risolvono: mai in un toast. *@
+<div class="avviso avviso-@Classe" role="@(Tipo == TipoSegnalazione.Errore ? "alert" : "status")">
+    <Icona Nome="@NomeIcona" Etichetta="@Etichetta" />
+    <div class="avviso-testo">
+        @if (!string.IsNullOrEmpty(Titolo))
+        {
+            <span class="type-body-strong">@Titolo</span>
+        }
+        <div>@ChildContent</div>
+        @if (!string.IsNullOrEmpty(Posizione))
+        {
+            <span class="avviso-riga">@Posizione</span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public TipoSegnalazione Tipo { get; set; } = TipoSegnalazione.Info;
+    [Parameter] public string? Titolo { get; set; }
+    [Parameter] public string? Posizione { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Classe => Tipo switch
+    {
+        TipoSegnalazione.Successo => "successo",
+        TipoSegnalazione.Attenzione => "attenzione",
+        TipoSegnalazione.Errore => "errore",
+        _ => "info",
+    };
+
+    private string NomeIcona => Tipo switch
+    {
+        TipoSegnalazione.Successo => "circle-check",
+        TipoSegnalazione.Attenzione => "triangle-alert",
+        TipoSegnalazione.Errore => "circle-x",
+        _ => "info",
+    };
+
+    // Il significato non sta solo nel colore: l'icona ha anche un nome per chi non la vede.
+    private string Etichetta => Tipo switch
+    {
+        TipoSegnalazione.Successo => "Riuscito",
+        TipoSegnalazione.Attenzione => "Attenzione",
+        TipoSegnalazione.Errore => "Errore",
+        _ => "Informazione",
+    };
+}

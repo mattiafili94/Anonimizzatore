@@ -1,0 +1,276 @@
+@page "/"
+@using Anonimizzatore.Motore.Controllo
+@inherits PaginaConStato
+
+<PageTitle>Anonimizza · Anonimizzatore T-SQL</PageTitle>
+
+<div class="pagina pagina-larga">
+    <header class="intestazione">
+        <div class="intestazione-testo">
+            <h1 class="type-page-title">Anonimizza</h1>
+            <p class="testo-secondario">Incolla uno o più script T-SQL: i nomi vengono sostituiti, il resto resta com'è.</p>
+        </div>
+        @if (Stato.Profili.Count > 0)
+        {
+            <div class="intestazione-azioni">
+                <div class="campo">
+                    <label for="profilo">Profilo</label>
+                    <select id="profilo" value="@Stato.Corrente?.Profilo.Id" @onchange="CambiaProfilo">
+                        @foreach (var p in Stato.Profili)
+                        {
+                            <option value="@p.Profilo.Id">@p.Profilo.Nome</option>
+                        }
+                    </select>
+                </div>
+                <button type="button" class="pulsante pulsante-primario" @onclick="AnonimizzaAsync"
+                        disabled="@(!PuoAnonimizzare)" aria-busy="@(Stato.Occupato ? "true" : "false")">
+                    <Icona Nome="@(Stato.Occupato ? "loader-circle" : "shield-check")" />
+                    Anonimizza
+                </button>
+            </div>
+        }
+    </header>
+
+    @if (Stato.ProfiliIllegibili.Count > 0)
+    {
+        <Segnalazione Tipo="TipoSegnalazione.Attenzione" Titolo="Alcuni profili non si sono potuti leggere">
+            Succede, per esempio, se i file arrivano da un altro PC o da un altro utente di Windows.
+            <a href="profili">Vedi i dettagli nei profili</a>.
+        </Segnalazione>
+    }
+
+    @if (Stato.Profili.Count == 0)
+    {
+        <div class="vuoto">
+            <Icona Nome="users" Dimensione="24" />
+            <h2 class="type-section-heading">Crea il primo profilo</h2>
+            <p class="testo-secondario">
+                Un profilo è un cliente: tiene i nomi già assegnati, così lo stesso nome ha sempre lo stesso nome anonimo
+                e le risposte dell'IA si possono rimettere a posto.
+            </p>
+            <a class="pulsante pulsante-primario" href="profili"><Icona Nome="plus" />Nuovo profilo</a>
+        </div>
+    }
+    else
+    {
+        <section aria-label="Script da anonimizzare" class="elenco-avvisi">
+            @for (var i = 0; i < Stato.Script.Count; i++)
+            {
+                var indice = i;
+                <div class="script-blocco" @key="indice">
+                    <div class="script-testata">
+                        <h2 class="type-label">Script @(indice + 1)</h2>
+                        <div class="intestazione-azioni">
+                            <button type="button" class="pulsante pulsante-testo pulsante-compatto" @onclick="() => IncollaAsync(indice)">
+                                <Icona Nome="clipboard-paste" Dimensione="16" />Incolla dagli appunti
+                            </button>
+                            @if (Stato.Script.Count > 1 || !string.IsNullOrEmpty(Stato.Script[indice]))
+                            {
+                                <button type="button" class="pulsante pulsante-testo pulsante-compatto" @onclick="() => Stato.RimuoviScript(indice)"
+                                        aria-label="@(Stato.Script.Count > 1 ? $"Rimuovi lo script {indice + 1}" : "Svuota lo script")">
+                                    <Icona Nome="@(Stato.Script.Count > 1 ? "x" : "trash-2")" Dimensione="16" />@(Stato.Script.Count > 1 ? "Rimuovi" : "Svuota")
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <EditorSql Etichetta="@($"Script {indice + 1}")" Altezza="@(Stato.Script.Count > 1 ? "14rem" : "18rem")"
+                               Segnaposto="Incolla qui lo script T-SQL…"
+                               Valore="@Stato.Script[indice]" ValoreChanged="v => CambiaScript(indice, v)" />
+                </div>
+            }
+            <div>
+                <button type="button" class="pulsante pulsante-secondario" @onclick="Stato.AggiungiScript">
+                    <Icona Nome="plus" />Aggiungi script
+                </button>
+            </div>
+        </section>
+
+        @if (_errore is not null)
+        {
+            <Segnalazione Tipo="TipoSegnalazione.Errore" Titolo="Non sono riuscito ad anonimizzare">@_errore</Segnalazione>
+        }
+
+        @if (Stato.Anonimizzato is { } a)
+        {
+            <section aria-label="Risultato" class="elenco-avvisi">
+                <div class="intestazione">
+                    <Segmenti Etichetta="Vista del risultato" Voci="Viste" Valore="@_vista" ValoreChanged="v => _vista = v" />
+                    <div class="intestazione-azioni">
+                        <button type="button" class="pulsante pulsante-primario" @onclick="() => CopiaAsync(false)"
+                                disabled="@(string.IsNullOrEmpty(a.Testo.Testo) || !Stato.AnonimizzatoAggiornato)">
+                            <Icona Nome="copy" />Copia testo per l'IA
+                        </button>
+                    </div>
+                </div>
+
+                @if (!Stato.AnonimizzatoAggiornato)
+                {
+                    <Segnalazione Tipo="TipoSegnalazione.Attenzione" Titolo="Il risultato non è aggiornato">
+                        Hai cambiato gli script o il profilo: premi Anonimizza per rifarlo. Finché non lo fai la copia è disattivata.
+                    </Segnalazione>
+                }
+                @if (a.Controllo.RichiedeConferma)
+                {
+                    <Segnalazione Tipo="TipoSegnalazione.Errore" Titolo="Qualcosa potrebbe non essere stato anonimizzato">
+                        Il controllo ha trovato dati che di solito non devono uscire. Guarda gli avvisi: prima di copiare ti chiederò conferma.
+                    </Segnalazione>
+                }
+                @if (_erroreCopia is not null)
+                {
+                    <Segnalazione Tipo="TipoSegnalazione.Errore" Titolo="Copia non riuscita">@_erroreCopia</Segnalazione>
+                }
+
+                @if (_vista == "confronto")
+                {
+                    @for (var k = 0; k < a.Risultato.Script.Count; k++)
+                    {
+                        var s = a.Risultato.Script[k];
+                        var originale = a.ScriptOriginali[k];
+                        <div class="script-blocco" @key="k">
+                            <h2 class="type-label">Script @(k + 1)</h2>
+                            @if (s.Testo is null)
+                            {
+                                <Segnalazione Tipo="TipoSegnalazione.Errore" Titolo="Script lasciato fuori">
+                                    Non si riesce a leggere nemmeno in parte, quindi non lo anonimizzo e non lo metto nel testo per l'IA.
+                                </Segnalazione>
+                            }
+                            else
+                            {
+                                <ConfrontoSql Etichetta="@($"Confronto dello script {k + 1}")" Originale="@originale" Modificato="@s.Testo" />
+                            }
+                        </div>
+                    }
+                }
+                else if (_vista == "testo")
+                {
+                    <div class="script-blocco">
+                        <p class="testo-secondario">Questo è esattamente il testo che copierai: legenda, poi gli script.</p>
+                        <EditorSql Etichetta="Testo per l'IA" SoloLettura="true" Altezza="30rem" Valore="@a.Testo.Testo" />
+                    </div>
+                }
+                else
+                {
+                    <ElencoAvvisi Voci="@VociAvviso(a)" TitoloVuoto="Tutto in ordine"
+                                  TestoVuoto="Nessun avviso e nessun dato lasciato fuori posto." />
+                }
+            </section>
+        }
+    }
+</div>
+
+@if (_dialogoFughe && Stato.Anonimizzato is { } risultato)
+{
+    <Dialogo Titolo="Copiare comunque?" AlChiudere="ChiudiDialogo">
+    <ChildContent>
+        <p>Il controllo ha trovato questi punti. Se sono dati veri, copiandoli usciranno dal tuo PC insieme al testo.</p>
+        <ul class="elenco-avvisi" style="padding:0;list-style:none;margin-top:var(--space-12)">
+            @foreach (var f in risultato.Controllo.Fughe.Where(f => f.Gravita == GravitaFuga.Bloccante).Take(8))
+            {
+                <li><Segnalazione Tipo="TipoSegnalazione.Errore" Posizione="@Posizione(f)">@f.Messaggio</Segnalazione></li>
+            }
+        </ul>
+        @if (risultato.Controllo.Fughe.Count(f => f.Gravita == GravitaFuga.Bloccante) > 8)
+        {
+            <p class="testo-secondario">…e altri: li trovi tutti negli avvisi.</p>
+        }
+    </ChildContent>
+        <Azioni>
+            <button type="button" class="pulsante pulsante-primario" @onclick="ChiudiDialogo">Torna indietro</button>
+            <button type="button" class="pulsante pulsante-pericolo" @onclick="() => CopiaAsync(true)">Copia comunque</button>
+        </Azioni>
+    </Dialogo>
+}
+
+@code {
+    private string _vista = "confronto";
+    private bool _dialogoFughe;
+    private string? _errore;
+    private string? _erroreCopia;
+
+    private bool PuoAnonimizzare => Stato.Corrente is not null && Stato.ScriptDaAnonimizzare.Count > 0 && !Stato.Occupato;
+
+    private IReadOnlyList<Segmenti.Voce> Viste =>
+    [
+        new("confronto", "Confronto"),
+        new("testo", "Testo per l'IA"),
+        new("avvisi", "Avvisi", Stato.Anonimizzato is { } a ? VociAvviso(a).Count : 0),
+    ];
+
+    private async Task CambiaProfilo(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id)) await Stato.SelezionaAsync(id);
+    }
+
+    private void CambiaScript(int indice, string valore)
+    {
+        if (indice < Stato.Script.Count) Stato.Script[indice] = valore;
+        StateHasChanged();
+    }
+
+    private async Task IncollaAsync(int indice)
+    {
+        var testo = await Appunti.IncollaAsync();
+        if (testo is null)
+        {
+            _errore = "Non riesco a leggere gli appunti: incolla direttamente nell'editor con Ctrl+V.";
+            return;
+        }
+        _errore = null;
+        Stato.Script[indice] = testo;
+    }
+
+    private async Task AnonimizzaAsync()
+    {
+        _errore = null;
+        _erroreCopia = null;
+        try
+        {
+            await Stato.AnonimizzaAsync();
+            _vista = "confronto";
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            _errore = "Si è verificato un errore imprevisto: " + e.Message;
+        }
+    }
+
+    private async Task CopiaAsync(bool confermato)
+    {
+        if (Stato.Anonimizzato is not { } a) return;
+        _erroreCopia = null;
+        if (!confermato && a.Controllo.RichiedeConferma)
+        {
+            _dialogoFughe = true;
+            return;
+        }
+        _dialogoFughe = false;
+        if (await Appunti.CopiaAsync(a.Testo.Testo)) Notifiche.Mostra("Testo per l'IA copiato");
+        else _erroreCopia = "Il sistema non ha permesso di scrivere negli appunti. Seleziona il testo nella vista «Testo per l'IA» e copialo con Ctrl+C.";
+    }
+
+    private void ChiudiDialogo() => _dialogoFughe = false;
+
+    private static string Posizione(Fuga f) =>
+        f.Script < 0 ? $"Schema allegato · riga {f.Riga}" : $"Script {f.Script + 1} · riga {f.Riga}";
+
+    private static List<VoceAvviso> VociAvviso(SessioneAnonimizzazione a)
+    {
+        var voci = new List<VoceAvviso>();
+        foreach (var f in a.Controllo.Fughe)
+        {
+            voci.Add(new(f.Gravita == GravitaFuga.Bloccante ? TipoSegnalazione.Errore : TipoSegnalazione.Attenzione, f.Messaggio, Posizione(f)));
+        }
+        for (var k = 0; k < a.Risultato.Script.Count; k++)
+        {
+            foreach (var av in a.Risultato.Script[k].Avvisi)
+            {
+                voci.Add(new(TipoSegnalazione.Info, av.Messaggio, av.Riga > 0 ? $"Script {k + 1} · riga {av.Riga}" : $"Script {k + 1}"));
+            }
+        }
+        foreach (var k in a.Testo.ScriptEsclusi)
+        {
+            voci.Add(new(TipoSegnalazione.Errore, "Questo script non è nel testo per l'IA perché non si riesce ad anonimizzare.", $"Script {k + 1}"));
+        }
+        return voci;
+    }
+}

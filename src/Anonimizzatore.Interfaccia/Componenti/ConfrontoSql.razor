@@ -1,0 +1,72 @@
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+@* Due testi affiancati con le differenze evidenziate (diff editor di Monaco). *@
+<div>
+    <div class="confronto-etichette" aria-hidden="true">
+        <span>@EtichettaOriginale</span>
+        <span>@EtichettaModificato</span>
+    </div>
+    <div class="editor-riquadro" style="height:@Altezza" role="group" aria-label="@Etichetta">
+        <div @ref="_elemento" class="editor-sql"></div>
+    </div>
+</div>
+
+@code {
+    private ElementReference _elemento;
+    private IJSObjectReference? _modulo;
+    private int _id;
+    private string _originale = "";
+    private string _modificato = "";
+    private bool _eliminato;
+
+    [Parameter] public string Originale { get; set; } = "";
+    [Parameter] public string Modificato { get; set; } = "";
+    [Parameter] public string EtichettaOriginale { get; set; } = "Originale";
+    [Parameter] public string EtichettaModificato { get; set; } = "Anonimizzato";
+    [Parameter] public string Altezza { get; set; } = "22rem";
+
+    /// <summary>Il nome del confronto per chi usa uno screen reader (es. "Confronto dello script 1").</summary>
+    [Parameter, EditorRequired] public string Etichetta { get; set; } = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_eliminato) return;
+        if (firstRender)
+        {
+            _originale = Originale ?? "";
+            _modificato = Modificato ?? "";
+            _modulo = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Anonimizzatore.Interfaccia/js/editor.js");
+            _id = await _modulo.InvokeAsync<int>("creaConfronto", _elemento, _originale, _modificato);
+            if (_eliminato) await Libera();
+            return;
+        }
+
+        if (_modulo is not null && _id != 0 && ((Originale ?? "") != _originale || (Modificato ?? "") != _modificato))
+        {
+            _originale = Originale ?? "";
+            _modificato = Modificato ?? "";
+            await _modulo.InvokeVoidAsync("aggiornaConfronto", _id, _originale, _modificato);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _eliminato = true;
+        await Libera();
+    }
+
+    private async Task Libera()
+    {
+        try
+        {
+            if (_modulo is not null && _id != 0) await _modulo.InvokeVoidAsync("distruggi", _id);
+            if (_modulo is not null) await _modulo.DisposeAsync();
+        }
+        catch (Exception e) when (e is JSDisconnectedException or JSException or InvalidOperationException or TaskCanceledException)
+        {
+            // la pagina si sta chiudendo: non c'è più nulla da liberare
+        }
+        _modulo = null;
+    }
+}

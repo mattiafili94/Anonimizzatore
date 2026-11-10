@@ -1,0 +1,500 @@
+@page "/profili"
+@using Anonimizzatore.Motore.Mappa
+@using Anonimizzatore.Motore.Profili
+@inherits PaginaConStato
+
+<PageTitle>Profili · Anonimizzatore T-SQL</PageTitle>
+
+<div class="pagina">
+    @if (Dettaglio is { } profilo)
+    {
+        @* ===== Un profilo ===== *@
+        <header class="intestazione">
+            <div class="intestazione-testo">
+                <button type="button" class="pulsante pulsante-testo pulsante-compatto" @onclick="Indietro">
+                    <Icona Nome="arrow-left" Dimensione="16" />Tutti i profili
+                </button>
+                <h1 class="type-page-title">@profilo.Profilo.Nome</h1>
+                <p class="testo-secondario numerico">@profilo.Mappa.Voci.Count nomi assegnati</p>
+            </div>
+            <div class="intestazione-azioni">
+                @if (Stato.Corrente?.Profilo.Id == profilo.Profilo.Id)
+                {
+                    <span class="testo-secondario">In uso</span>
+                }
+                else
+                {
+                    <button type="button" class="pulsante pulsante-secondario" @onclick="() => Stato.SelezionaAsync(profilo.Profilo.Id)">
+                        <Icona Nome="check" />Usa questo profilo
+                    </button>
+                }
+            </div>
+        </header>
+
+        <section class="gruppo" aria-labelledby="titolo-nome">
+            <h2 class="gruppo-titolo type-label" id="titolo-nome">Nome</h2>
+            <div class="gruppo-corpo">
+                <div class="campo">
+                    <label for="nome-profilo">Nome del profilo</label>
+                    <input id="nome-profilo" type="text" @bind="_nome" @bind:event="oninput" @onkeydown="TastoNome"
+                           aria-invalid="@(_erroreNome is null ? null : "true")" aria-describedby="@(_erroreNome is null ? null : "errore-nome")" />
+                    @if (_erroreNome is not null)
+                    {
+                        <span class="campo-errore" id="errore-nome"><Icona Nome="circle-x" Dimensione="16" />@_erroreNome</span>
+                    }
+                    else
+                    {
+                        <span class="campo-aiuto">Il nome resta nel profilo cifrato: non compare nel nome del file.</span>
+                    }
+                </div>
+                <div>
+                    <button type="button" class="pulsante pulsante-secondario" @onclick="RinominaAsync"
+                            disabled="@(string.IsNullOrWhiteSpace(_nome) || _nome.Trim() == profilo.Profilo.Nome)">
+                        <Icona Nome="save" />Rinomina
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section aria-labelledby="titolo-regole" class="elenco-avvisi">
+            <div class="intestazione-testo">
+                <h2 class="type-section-heading" id="titolo-regole">Regole per tipo di oggetto</h2>
+                <p class="testo-secondario">
+                    «Anonimizza» sostituisce il nome con uno anonimo; «In chiaro» lo lascia com'è. Un nome in chiaro che contiene
+                    una parola della blacklist viene anonimizzato lo stesso. Le modifiche si salvano subito.
+                </p>
+            </div>
+            @foreach (var gruppo in Gruppi)
+            {
+                <div class="gruppo">
+                    <h3 class="gruppo-titolo type-label">@gruppo.Titolo</h3>
+                    @foreach (var ruolo in gruppo.Ruoli)
+                    {
+                        var r = ruolo;
+                        <div class="riga">
+                            <div class="riga-nome">
+                                <span>@EtichettaRuolo(r)</span>
+                                <span class="campo-aiuto codice">@Esempio(r)</span>
+                            </div>
+                            <Segmenti Etichetta="@EtichettaRuolo(r)" Voci="Trattamenti" Valore="@TrattamentoDi(profilo, r)"
+                                      ValoreChanged="v => ImpostaTrattamentoAsync(profilo, r, v)" />
+                        </div>
+                    }
+                </div>
+            }
+            <p class="campo-aiuto">Percorsi, indirizzi IP ed email trovati nelle stringhe vengono sempre anonimizzati.</p>
+        </section>
+
+        <section class="gruppo" aria-labelledby="titolo-liste">
+            <h2 class="gruppo-titolo type-label" id="titolo-liste">Whitelist e blacklist</h2>
+            <div class="gruppo-corpo">
+                <div class="campo">
+                    <label for="whitelist">Whitelist: nomi che restano in chiaro</label>
+                    <textarea id="whitelist" @bind="_whitelist" @bind:event="oninput" rows="5" spellcheck="false"
+                              placeholder="Una voce per riga"></textarea>
+                    <span class="campo-aiuto">
+                        Un nome intero (<span class="codice">StatoOrdine</span>) o una parola (<span class="codice">Data</span>). Vale come aggiunta alle parole generiche già note
+                        all'app (<span class="codice">Id</span>, <span class="codice">Codice</span>, <span class="codice">Get</span>…).
+                    </span>
+                </div>
+                <div class="campo">
+                    <label for="blacklist">Blacklist: parole da anonimizzare sempre</label>
+                    <textarea id="blacklist" @bind="_blacklist" @bind:event="oninput" rows="5" spellcheck="false"
+                              placeholder="Una voce per riga"></textarea>
+                    <span class="campo-aiuto">
+                        Il nome del cliente, dei suoi prodotti, dei suoi server. Vince sempre sulla whitelist e vale anche per colonne,
+                        variabili e stringhe. Una voce di più parole (<span class="codice">Acme Srl</span>) vale come frase.
+                    </span>
+                </div>
+                <div>
+                    <button type="button" class="pulsante pulsante-secondario" @onclick="SalvaListeAsync" disabled="@(!ListeModificate(profilo))">
+                        <Icona Nome="save" />Salva le liste
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section aria-labelledby="titolo-nomi" class="elenco-avvisi">
+            <div class="intestazione">
+                <div class="intestazione-testo">
+                    <h2 class="type-section-heading" id="titolo-nomi">Nomi assegnati</h2>
+                    <p class="testo-secondario">Il nome vero e quello anonimo: ti serve per controllare. Questi nomi restano stabili fra una sessione e l'altra.</p>
+                </div>
+                <div class="campo">
+                    <label for="cerca-nome">Cerca</label>
+                    <input id="cerca-nome" type="text" @bind="_cerca" @bind:event="oninput" placeholder="Nome vero o anonimo" />
+                </div>
+            </div>
+            @if (VociMappa(profilo) is { Count: > 0 } voci)
+            {
+                <div class="gruppo">
+                    <table class="tabella">
+                        <thead>
+                            <tr><th scope="col">Nome vero</th><th scope="col">Nome anonimo</th><th scope="col">Tipo</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var v in voci.Take(200))
+                            {
+                                <tr>
+                                    <td class="codice">@v.Originale</td>
+                                    <td class="codice">@v.Anonimo</td>
+                                    <td class="testo-secondario">@EtichettaRuolo(v.Ruolo)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (voci.Count > 200)
+                {
+                    <p class="campo-aiuto">Sono mostrati i primi 200 di @voci.Count: usa la ricerca per restringere.</p>
+                }
+            }
+            else
+            {
+                <div class="vuoto">
+                    <Icona Nome="database" Dimensione="24" />
+                    <p class="testo-secondario">
+                        @(string.IsNullOrWhiteSpace(_cerca) ? "Nessun nome assegnato: la mappa si riempie man mano che anonimizzi gli script." : "Nessun nome corrisponde alla ricerca.")
+                    </p>
+                </div>
+            }
+        </section>
+
+        <section class="gruppo" aria-labelledby="titolo-azioni">
+            <h2 class="gruppo-titolo type-label" id="titolo-azioni">Azioni delicate</h2>
+            <div class="riga">
+                <div class="riga-nome">
+                    <span>Rigenera i nomi</span>
+                    <span class="campo-aiuto">Da usare all'inizio di una nuova conversazione con l'IA. I nomi già assegnati vengono dimenticati.</span>
+                </div>
+                <button type="button" class="pulsante pulsante-secondario" @onclick="() => _dialogo = Dialoghi.Rigenera">
+                    <Icona Nome="refresh-cw" />Rigenera nomi
+                </button>
+            </div>
+            <div class="riga">
+                <div class="riga-nome">
+                    <span>Elimina il profilo</span>
+                    <span class="campo-aiuto">Cancella il profilo, la mappa dei nomi e le liste da questo PC.</span>
+                </div>
+                <button type="button" class="pulsante pulsante-pericolo" @onclick="() => _dialogo = Dialoghi.Elimina">
+                    <Icona Nome="trash-2" />Elimina profilo
+                </button>
+            </div>
+        </section>
+    }
+    else
+    {
+        @* ===== Elenco ===== *@
+        <header class="intestazione">
+            <div class="intestazione-testo">
+                <h1 class="type-page-title">Profili</h1>
+                <p class="testo-secondario">Un profilo per cliente. Ognuno ha le sue regole e la sua mappa dei nomi.</p>
+            </div>
+            <div class="intestazione-azioni">
+                <button type="button" class="pulsante pulsante-primario" @onclick="ApriNuovo">
+                    <Icona Nome="plus" />Nuovo profilo
+                </button>
+            </div>
+        </header>
+
+        @foreach (var errore in Stato.ProfiliIllegibili)
+        {
+            <Segnalazione Tipo="TipoSegnalazione.Attenzione" Titolo="Un profilo non si è potuto leggere">
+                @errore Succede se il file arriva da un altro PC o da un altro utente di Windows: la cifratura è legata a questo utente.
+            </Segnalazione>
+        }
+
+        @if (Stato.Profili.Count == 0)
+        {
+            <div class="vuoto">
+                <Icona Nome="users" Dimensione="24" />
+                <h2 class="type-section-heading">Nessun profilo</h2>
+                <p class="testo-secondario">Crea un profilo per il primo cliente: poi potrai anonimizzare i suoi script.</p>
+            </div>
+        }
+        else
+        {
+            <div class="gruppo">
+                @foreach (var p in Stato.Profili)
+                {
+                    var id = p.Profilo.Id;
+                    <button type="button" class="riga @(id == Stato.Corrente?.Profilo.Id ? "riga-selezionata" : null)" @onclick="() => Apri(id)">
+                        <span class="riga-nome">
+                            <span class="type-body-strong">@p.Profilo.Nome</span>
+                            <span class="campo-aiuto numerico">@p.Mappa.Voci.Count nomi assegnati</span>
+                        </span>
+                        <span class="riga-valore">
+                            @if (id == Stato.Corrente?.Profilo.Id)
+                            {
+                                <span>In uso</span>
+                            }
+                            <Icona Nome="chevron-right" Dimensione="16" />
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@if (_dialogo == Dialoghi.Nuovo)
+{
+    <Dialogo Titolo="Nuovo profilo" AlChiudere="ChiudiDialogo">
+    <ChildContent>
+        <div class="campo">
+            <label for="nome-nuovo">Nome del profilo</label>
+            <input id="nome-nuovo" type="text" @bind="_nomeNuovo" @bind:event="oninput" @onkeydown="TastoNuovo"
+                   aria-invalid="@(_erroreNuovo is null ? null : "true")" />
+            @if (_erroreNuovo is not null)
+            {
+                <span class="campo-errore"><Icona Nome="circle-x" Dimensione="16" />@_erroreNuovo</span>
+            }
+            else
+            {
+                <span class="campo-aiuto">Per esempio il nome del cliente. Lo vedi solo tu.</span>
+            }
+        </div>
+    </ChildContent>
+        <Azioni>
+            <button type="button" class="pulsante pulsante-secondario" @onclick="ChiudiDialogo">Annulla</button>
+            <button type="button" class="pulsante pulsante-primario" @onclick="CreaAsync">Crea profilo</button>
+        </Azioni>
+    </Dialogo>
+}
+else if (_dialogo == Dialoghi.Rigenera && Dettaglio is { } pr)
+{
+    <Dialogo Titolo="@($"Rigenerare i nomi di «{pr.Profilo.Nome}»?")" AlChiudere="ChiudiDialogo">
+    <ChildContent>
+        <p>
+            I @pr.Mappa.Voci.Count nomi già assegnati vengono dimenticati e gli script futuri riceveranno nomi nuovi, da capo.
+            Le risposte dell'IA ricevute con i vecchi nomi non si potranno più ripristinare.
+        </p>
+    </ChildContent>
+        <Azioni>
+            <button type="button" class="pulsante pulsante-primario" @onclick="ChiudiDialogo">Annulla</button>
+            <button type="button" class="pulsante pulsante-pericolo" @onclick="RigeneraAsync">Rigenera nomi</button>
+        </Azioni>
+    </Dialogo>
+}
+else if (_dialogo == Dialoghi.Elimina && Dettaglio is { } pe)
+{
+    <Dialogo Titolo="@($"Eliminare il profilo «{pe.Profilo.Nome}»?")" AlChiudere="ChiudiDialogo">
+    <ChildContent>
+        <p>
+            Il profilo sparisce da questo PC insieme alla mappa dei nomi, alla whitelist e alla blacklist. Non si può annullare:
+            le risposte dell'IA ricevute con i suoi nomi non si potranno più ripristinare.
+        </p>
+    </ChildContent>
+        <Azioni>
+            <button type="button" class="pulsante pulsante-primario" @onclick="ChiudiDialogo">Annulla</button>
+            <button type="button" class="pulsante pulsante-pericolo-pieno" @onclick="EliminaAsync">Elimina profilo</button>
+        </Azioni>
+    </Dialogo>
+}
+
+@code {
+    private enum Dialoghi { Nessuno, Nuovo, Rigenera, Elimina }
+
+    private sealed record GruppoRuoli(string Titolo, Ruolo[] Ruoli);
+
+    private static readonly GruppoRuoli[] Gruppi =
+    [
+        new("Oggetti", [Ruolo.Server, Ruolo.LinkedServer, Ruolo.Database, Ruolo.Schema, Ruolo.Tabella, Ruolo.Vista,
+            Ruolo.Procedura, Ruolo.Funzione, Ruolo.Trigger, Ruolo.Job]),
+        new("Sicurezza", [Ruolo.Login, Ruolo.Utente, Ruolo.RuoloDb, Ruolo.Dominio]),
+        new("Colonne e variabili", [Ruolo.Colonna, Ruolo.Variabile, Ruolo.Parametro, Ruolo.Temporanea, Ruolo.Alias]),
+        new("Indici e vincoli", [Ruolo.Indice, Ruolo.PrimaryKey, Ruolo.ForeignKey, Ruolo.Default, Ruolo.Check, Ruolo.Unique]),
+    ];
+
+    private static readonly IReadOnlyList<Segmenti.Voce> Trattamenti =
+        [new("Anonimizza", "Anonimizza"), new("InChiaro", "In chiaro")];
+
+    private Guid? _aperto;
+    private Dialoghi _dialogo;
+    private string _nome = "";
+    private string? _erroreNome;
+    private string _nomeNuovo = "";
+    private string? _erroreNuovo;
+    private string _whitelist = "";
+    private string _blacklist = "";
+    private string _cerca = "";
+
+    private ProfiloSalvato? Dettaglio => _aperto is { } id ? Stato.Profili.FirstOrDefault(p => p.Profilo.Id == id) : null;
+
+    private void Apri(Guid id)
+    {
+        _aperto = id;
+        var p = Dettaglio!;
+        _nome = p.Profilo.Nome;
+        _erroreNome = null;
+        _whitelist = string.Join('\n', p.Profilo.Whitelist);
+        _blacklist = string.Join('\n', p.Profilo.Blacklist);
+        _cerca = "";
+    }
+
+    private void Indietro() => _aperto = null;
+
+    private void ChiudiDialogo() => _dialogo = Dialoghi.Nessuno;
+
+    // --- nuovo, rinomina ---
+
+    private void ApriNuovo()
+    {
+        _nomeNuovo = "";
+        _erroreNuovo = null;
+        _dialogo = Dialoghi.Nuovo;
+    }
+
+    private Task TastoNuovo(KeyboardEventArgs e) => e.Key == "Enter" ? CreaAsync() : Task.CompletedTask;
+
+    private async Task CreaAsync()
+    {
+        _erroreNuovo = await Stato.CreaProfiloAsync(_nomeNuovo);
+        if (_erroreNuovo is null)
+        {
+            _dialogo = Dialoghi.Nessuno;
+            Notifiche.Mostra("Profilo creato");
+            Apri(Stato.Corrente!.Profilo.Id);
+        }
+    }
+
+    private Task TastoNome(KeyboardEventArgs e) => e.Key == "Enter" ? RinominaAsync() : Task.CompletedTask;
+
+    private async Task RinominaAsync()
+    {
+        if (Dettaglio is not { } p) return;
+        _erroreNome = await Stato.RinominaAsync(p.Profilo.Id, _nome);
+        if (_erroreNome is null) Notifiche.Mostra("Nome cambiato");
+    }
+
+    // --- regole ---
+
+    private static string TrattamentoDi(ProfiloSalvato p, Ruolo ruolo) => p.Profilo.TrattamentoDi(ruolo).ToString();
+
+    private async Task ImpostaTrattamentoAsync(ProfiloSalvato p, Ruolo ruolo, string valore)
+    {
+        if (!Enum.TryParse<Motore.Profili.Trattamento>(valore, out var t)) return;
+        p.Profilo.Matrice[ruolo] = t;
+        await Stato.SalvaAsync(p);
+    }
+
+    // --- liste ---
+
+    private static List<string> Voci(string testo) =>
+        [.. testo.Split('\n').Select(r => r.Trim()).Where(r => r.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    private bool ListeModificate(ProfiloSalvato p) =>
+        !Voci(_whitelist).SequenceEqual(p.Profilo.Whitelist) || !Voci(_blacklist).SequenceEqual(p.Profilo.Blacklist);
+
+    private async Task SalvaListeAsync()
+    {
+        if (Dettaglio is not { } p) return;
+        var whitelist = Voci(_whitelist);
+        var blacklist = Voci(_blacklist);
+        p.Profilo.Whitelist.Clear();
+        p.Profilo.Whitelist.AddRange(whitelist);
+        p.Profilo.Blacklist.Clear();
+        p.Profilo.Blacklist.AddRange(blacklist);
+        await Stato.SalvaAsync(p);
+        _whitelist = string.Join('\n', whitelist);
+        _blacklist = string.Join('\n', blacklist);
+        Notifiche.Mostra("Liste salvate");
+    }
+
+    // --- nomi assegnati ---
+
+    private List<VoceMappa> VociMappa(ProfiloSalvato p)
+    {
+        IEnumerable<VoceMappa> voci = p.Mappa.Voci;
+        var cerca = _cerca.Trim();
+        if (cerca.Length > 0)
+        {
+            voci = voci.Where(v => v.Originale.Contains(cerca, StringComparison.OrdinalIgnoreCase)
+                                   || v.Anonimo.Contains(cerca, StringComparison.OrdinalIgnoreCase));
+        }
+        return [.. voci.OrderBy(v => v.Anonimo, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    // --- azioni delicate ---
+
+    private async Task RigeneraAsync()
+    {
+        if (Dettaglio is not { } p) return;
+        _dialogo = Dialoghi.Nessuno;
+        await Stato.RigeneraNomiAsync(p.Profilo.Id);
+        Notifiche.Mostra("Nomi rigenerati");
+    }
+
+    private async Task EliminaAsync()
+    {
+        if (Dettaglio is not { } p) return;
+        _dialogo = Dialoghi.Nessuno;
+        _aperto = null;
+        await Stato.EliminaAsync(p.Profilo.Id);
+        Notifiche.Mostra("Profilo eliminato");
+    }
+
+    // --- testi ---
+
+    private static string EtichettaRuolo(Ruolo ruolo) => ruolo switch
+    {
+        Ruolo.Server => "Server",
+        Ruolo.LinkedServer => "Linked server",
+        Ruolo.Database => "Database",
+        Ruolo.Schema => "Schemi (tranne dbo)",
+        Ruolo.Tabella => "Tabelle",
+        Ruolo.Vista => "Viste",
+        Ruolo.Procedura => "Stored procedure",
+        Ruolo.Funzione => "Funzioni",
+        Ruolo.Trigger => "Trigger",
+        Ruolo.Job => "Job di SQL Agent",
+        Ruolo.Login => "Login",
+        Ruolo.Utente => "Utenti",
+        Ruolo.RuoloDb => "Ruoli",
+        Ruolo.Dominio => "Domini",
+        Ruolo.Indice => "Indici",
+        Ruolo.PrimaryKey => "Chiavi primarie",
+        Ruolo.ForeignKey => "Chiavi esterne",
+        Ruolo.Default => "Default",
+        Ruolo.Check => "Check",
+        Ruolo.Unique => "Unique",
+        Ruolo.Colonna => "Colonne",
+        Ruolo.Variabile => "Variabili",
+        Ruolo.Parametro => "Parametri",
+        Ruolo.Temporanea => "Tabelle temporanee",
+        Ruolo.Alias => "Alias e CTE",
+        Ruolo.Cartella => "Cartelle",
+        Ruolo.File => "File",
+        Ruolo.Ip => "Indirizzi IP",
+        Ruolo.Email => "Email",
+        _ => ruolo.ToString(),
+    };
+
+    private static string Esempio(Ruolo ruolo) => ruolo switch
+    {
+        Ruolo.Server or Ruolo.LinkedServer => "srv_01",
+        Ruolo.Database => "db_01",
+        Ruolo.Schema => "sch_01",
+        Ruolo.Tabella => "tbl_001",
+        Ruolo.Vista => "vw_001",
+        Ruolo.Procedura => "usp_001",
+        Ruolo.Funzione => "fn_001",
+        Ruolo.Trigger => "trg_001",
+        Ruolo.Job => "job_001",
+        Ruolo.Login or Ruolo.Utente => "usr_001",
+        Ruolo.RuoloDb => "rol_001",
+        Ruolo.Dominio => "dom_01",
+        Ruolo.Indice => "ix_001",
+        Ruolo.PrimaryKey => "pk_001",
+        Ruolo.ForeignKey => "fk_001",
+        Ruolo.Default => "df_001",
+        Ruolo.Check => "ck_001",
+        Ruolo.Unique => "uq_001",
+        Ruolo.Colonna => "col_vc50_001",
+        Ruolo.Variabile => "@v_int_001",
+        Ruolo.Parametro => "@p_vc20_001",
+        Ruolo.Temporanea => "#tmp_001",
+        Ruolo.Alias => "al_001",
+        _ => "",
+    };
+}

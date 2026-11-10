@@ -1,0 +1,12 @@
+{
+  "name": "anonimizzatore-risorse-esterne",
+  "private": true,
+  "description": "Solo per preparare Monaco e le icone Lucide: npm ci && npm run prepara. Il risultato sta nella repo (wwwroot/lib e Componenti/IconeLucide.g.cs), quindi per compilare non serve Node.",
+  "scripts": {
+    "prepara": "node prepara.mjs"
+  },
+  "devDependencies": {
+    "monaco-editor": "0.52.2",
+    "lucide-static": "1.71.0"
+  }
+}

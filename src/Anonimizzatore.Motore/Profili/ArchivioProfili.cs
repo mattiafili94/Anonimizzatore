@@ -59,6 +59,31 @@ public sealed class ArchivioProfili(string cartella, IProtezioneDati protezione)
             .ToList();
     }
 
+    /// <summary>
+    /// Come <see cref="CaricaTutti"/>, ma un file che non si legge (cifrato da un altro utente o su un altro PC, danneggiato)
+    /// non ferma gli altri: finisce tra gli errori, con il nome del file e il motivo.
+    /// </summary>
+    public (IReadOnlyList<ProfiloSalvato> Profili, IReadOnlyList<string> Errori) CaricaTuttiTollerante()
+    {
+        var profili = new List<ProfiloSalvato>();
+        var errori = new List<string>();
+        if (Directory.Exists(cartella))
+            foreach (var file in Directory.EnumerateFiles(cartella, "*" + Estensione))
+            {
+                try
+                {
+                    if (!Guid.TryParse(Path.GetFileNameWithoutExtension(file), out var id)) continue;
+                    profili.Add(Carica(id));
+                }
+                catch (Exception e) when (e is IOException or InvalidDataException or System.Security.Cryptography.CryptographicException
+                                              or System.Text.Json.JsonException or UnauthorizedAccessException)
+                {
+                    errori.Add($"{Path.GetFileName(file)}: {e.Message}");
+                }
+            }
+        return ([.. profili.OrderBy(p => p.Profilo.Nome, NomeSql.Confronto)], errori);
+    }
+
     public void Elimina(Guid id) => File.Delete(Percorso(id));
 
     private string Percorso(Guid id) => Path.Combine(cartella, id.ToString("D") + Estensione);
